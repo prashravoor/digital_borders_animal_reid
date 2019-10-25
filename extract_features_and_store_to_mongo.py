@@ -4,23 +4,19 @@ import cv2
 import cv2.dnn as dnn
 import matplotlib.pyplot as plt
 import os
-import pickle
-from bson.binary import Binary
 import sys
-
-def getDB(client, dbName):
-    return client[dbName]
-
-def getCollection(client, dbName, collName):
-    return client[dbName][collName]
+from db_interface import DbRecord,DbInterface
+# import pickle
+# from bson.binary import Binary
 
 def initializeDB(client, dbName):
-    db = getDB(client, dbName)
-    if len(db.list_collection_names()) > 0:
+    cursor = client.getDB(dbName)
+    collections = cursor.getCollectionNames()
+    if len(collections) > 0:
         char = input('DB {} already contains some records. Reomve them? (y/n)'.format(dbName))
         if char.lower()[0] == 'y':
-            for col in db.list_collection_names():
-                getCollection(client, dbName, col).drop()
+            for col in collections:
+                cursor.dropCollection(col)
 
 def readCaffeModel(modelName):
     modelCfg = 'models/{}.prototxt'.format(modelName)
@@ -41,20 +37,6 @@ def getNetOutputs(net, inputBlob, layerNames):
     net.setInput(inputBlob)
     return net.forward(layerNames)
 
-def createRecord(feature, animalId, imageFile):
-    rec = {}
-    rec['animalId'] = animalId
-    rec['origSize'] = feature.shape
-    rec['imageFile'] = imageFile
-    rec['feature'] = Binary( pickle.dumps( feature, protocol=2) )
-    
-    return rec
-
-def insertRecords(client, dbName, docNames, records):
-    for i in range(len(docNames)):
-        getCollection(client, dbName, docNames[i]).insert_one(records[i])
-
-
 def extractFeaturesForImage(net, modelName, layerNames, imageFile):
     inputSize = (227,227)
     if 'googlenet' == modelName:
@@ -66,16 +48,16 @@ def extractFeaturesForImage(net, modelName, layerNames, imageFile):
     blob = createBlobFromImage(image, inputSize)
     return getNetOutputs(net, blob, layerNames)
 
-def processImagesAndStoreFeatures(client, dbName, modelName, modelsDict, imagesList, idsList):
+def processImagesAndStoreFeatures(client, datasetName, modelName, modelsDict, imagesList, idsList):
     network = modelsDict[modelName]
     layerNames = network.getLayerNames()
+    cursor = client.getDB(getDbName(datasetName, modelName))
+
     for i in range(len(imagesList)):
         features = extractFeaturesForImage(network, modelName, layerNames, imagesList[i])
-        records = []
-        for feat in features:
-            records.append(createRecord(feat, idsList[i], imagesList[i]))
-        # Store Batch to DB - DB name is the model name + dataset name, and the collection is the layer name
-        insertRecords(client, dbName + '_' + modelName, layerNames, records)
+        for j in range(len(features)):
+            rec = DbRecord(idsList[i], imagesList[i], features[j])
+            cursor.insertAsync(layerNames[j], rec)
 
 def readIdsForImages(imagesList, setType, keyfile):
     ids = []
@@ -97,11 +79,15 @@ def readIdsForImages(imagesList, setType, keyfile):
             ids.append(mapping[base.split('_')[0]])
     return ids
 
+
+def getDbName(datasetName, modelName):
+    return datasetName + '_' + modelName
+
 def main(args):
     if len(args) < 1:
         print('At least 1 images folder required')
         return
-    client = pm.MongoClient('localhost', 27017)
+    client = DbInterface() 
     imageFolders = args
 
     # modelNames = ['alexnet', 'googlenet', 'resnet50']
@@ -133,7 +119,7 @@ def main(args):
         print('Found {} images in folder {}, Using Image Type {}'.format(len(imageList), path, imType))
 
         for modelName in modelNames:
-            initializeDB(client, imType + '_' + modelName)
+            initializeDB(client, getDbName(imType, modelName))
             print('Processing {} images using Model {} for Set Type {}'.format(len(imageList), modelName, imType))
             processImagesAndStoreFeatures(client, imType, modelName, modelsDict, imageList, imageIds)
 
