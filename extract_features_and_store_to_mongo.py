@@ -83,7 +83,7 @@ def readIdsForImages(imagesList, setType, keyfile):
 def getDbName(datasetName, modelName):
     return datasetName + '_' + modelName
 
-def main(args):
+def extractFeaturesForImages(args):
     if len(args) < 1:
         print('At least 1 images folder required')
         return
@@ -123,5 +123,6 @@ def main(args):
             print('Processing {} images using Model {} for Set Type {}'.format(len(imageList), modelName, imType))
             processImagesAndStoreFeatures(client, imType, modelName, modelsDict, imageList, imageIds)
 
-main(sys.argv[1:])
+if __name__ == '__main__':
+    extractFeaturesForImages(sys.argv[1:])
 
