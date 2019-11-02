@@ -13,6 +13,8 @@ Compiling the source code is optional. However, the network configuration and we
 In the `extract_bb.py`, edit the default arguments as necessary for the **network configuration file**, **weights file** and **classes file**. <br>
 Run the code on an image through: `python extract_bb.py -i <Path to Image File>` <br>
 
+### Running with MobileNetV2-SSD
+Download the model file from [here](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_oid_v4_2018_12_12.tar.gz) ([source](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md)) and save them under the ssd folder. You can then run the `animal_detection.py` and the `mobilenet_ssd.ipynb` files using the saved model.
 
 ## Feature Extraction and SVM Regression
 In order to test the feature extraction and clustering using SVM, the following are required: <br>
