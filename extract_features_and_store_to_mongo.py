@@ -6,8 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 from db_interface import DbRecord,DbInterface
-# import pickle
-# from bson.binary import Binary
+from object_detection import ObjectDetector
 
 def initializeDB(client, dbName):
     cursor = client.getDB(dbName)
@@ -37,7 +36,7 @@ def getNetOutputs(net, inputBlob, layerNames):
     net.setInput(inputBlob)
     return net.forward(layerNames)
 
-def extractFeaturesForImage(net, modelName, layerNames, imageFile):
+def extractFeaturesForImage(net, modelName, layerNames, imageFile, detector):
     inputSize = (227,227)
     if 'googlenet' == modelName:
         inputSize = (224,224)
@@ -45,16 +44,21 @@ def extractFeaturesForImage(net, modelName, layerNames, imageFile):
         inputSize = (256,256)
     
     image = readImageFromFile(imageFile)
+    bounding_boxes = detector.getBoundingBoxes(image)
+    if len(bounding_boxes) == 1:
+        box = bounding_boxes[0].bounding_box
+        image = image[box.ymin:box.ymax, box.xmin:box.xmax,:]
+
     blob = createBlobFromImage(image, inputSize)
     return getNetOutputs(net, blob, layerNames)
 
-def processImagesAndStoreFeatures(client, datasetName, modelName, modelsDict, imagesList, idsList):
+def processImagesAndStoreFeatures(client, datasetName, modelName, modelsDict, imagesList, idsList, detector):
     network = modelsDict[modelName]
     layerNames = network.getLayerNames()
     cursor = client.getDB(getDbName(datasetName, modelName))
 
     for i in range(len(imagesList)):
-        features = extractFeaturesForImage(network, modelName, layerNames, imagesList[i])
+        features = extractFeaturesForImage(network, modelName, layerNames, imagesList[i], detector)
         for j in range(len(features)):
             rec = DbRecord(idsList[i], imagesList[i], features[j])
             cursor.insertAsync(layerNames[j], rec)
@@ -91,11 +95,18 @@ def extractFeaturesForImages(args):
     imageFolders = args
 
     # modelNames = ['alexnet', 'googlenet', 'resnet50']
-    modelNames = ['alexnet', 'googlenet']
+    modelNames = ['alexnet']
     modelsDict = {}
     for model in modelNames:
         modelsDict[model] = readCaffeModel(model)
         print('Loaded Model {}'.format(model))
+
+    print('Loading object Detection model...')
+    det = ObjectDetector('ssd/saved_model')
+    det.loadModel()
+    print('Warming up object detector...')
+    det.getBoundingBoxes(cv2.imread('amur_small/002019.jpg'))
+    det.getBoundingBoxes(cv2.imread('amur_small/002019.jpg'))
     
     for i in range(len(imageFolders)):
         # Read Images from folder
@@ -121,7 +132,7 @@ def extractFeaturesForImages(args):
         for modelName in modelNames:
             initializeDB(client, getDbName(imType, modelName))
             print('Processing {} images using Model {} for Set Type {}'.format(len(imageList), modelName, imType))
-            processImagesAndStoreFeatures(client, imType, modelName, modelsDict, imageList, imageIds)
+            processImagesAndStoreFeatures(client, imType, modelName, modelsDict, imageList, imageIds, det)
 
 if __name__ == '__main__':
     extractFeaturesForImages(sys.argv[1:])

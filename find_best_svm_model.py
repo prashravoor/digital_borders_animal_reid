@@ -10,6 +10,16 @@ if len(args) < 2:
 extractFeaturesForImages(args[1:])
 print()
 print('All features extracted and stored to DB, beginning SVM training')
-acc,layer,model,transform,kernel = find_best_svm_model()
-print('\n\nModel testing concluded.\n\n Max Accuracy: {}, Layer: {}, Model: {}, Transform: {}, Kernel: {}'
-        .format(acc,layer,model,transform,kernel) )
+
+dsNames = set()
+for folder in args[1:]:
+    if 'amur' in folder:
+        dsNames.add('amur')
+    elif 'elp' in folder:
+        dsNames.add('elp')
+
+modelNames = ['alexnet']
+for dsName in dsNames:
+    acc,layer,model,transform,kernel = find_best_svm_model(dsName, modelNames)
+    print('\n\nModel testing concluded for Dataset {}.\n\n Max Accuracy: {}, Layer: {}, Model: {}, Transform: {}, Kernel: {}'
+        .format(dsName,acc,layer,model,transform,kernel) )

@@ -17,8 +17,7 @@ def transform(features, trType=None):
     tr = lambda x: x.flatten()
     if trType == 'pca':
         features = [x.flatten() for x in features]
-        tr = lambda features: PCA(n_components=0.95).fit_transform(features)
-        return tr(features)
+        return PCA(n_components=0.95).fit_transform(features)
     elif trType == 'logm':
         def matrixLog(f):
             if not len(f.shape) == 2:
@@ -35,6 +34,9 @@ def transform(features, trType=None):
             res = scipy.linalg.logm(f) # Matrix logarithm
             res = np.tril(res) # Retain only lower triangle elements, since this is a symmetric matrix
             return res.flatten()
+        if features[0].size > (2048 * 2048): # Reduce using PCA since the matrix is too large
+            print('Size of matrix is {}, applying PCA to reduce dimensions'.format(features[0].size)) 
+            features = PCA(n_components=0.95).fit_transform([x.flatten() for x in features])
         tr = matrixLog
             
     return [tr(feature) for feature in features]
@@ -47,12 +49,11 @@ def writeResultToFile(outfile, ds, model, layer, kernel, transform, acc):
 def train_svm_for_layer(client, datasetName, modelName, layer, outfile):
     dbCursor = client.getDB(getDbName(datasetName, modelName))
 
-
     # print('Training Size: {}, Test Size: {}'.format(len(X_train), len(X_test)))
     max_acc = 0
     best_tr_type = None
     best_kernel_type = None
-    for trType in [None, 'pca', 'logm']:
+    for trType in [None, 'pca']: # trType in [None, 'pca', 'logm']:
         # The 4 statements can be moved outside the loop, but then they would be continuously in memory
         # Add them here so that they can be safely deleted to make memory for expensive SVM operations
         records = [dbCursor.getRecord(layer, recordId) for recordId in dbCursor.getRecordIds(layer)]
@@ -90,15 +91,17 @@ def train_svm_for_layer(client, datasetName, modelName, layer, outfile):
                 print('New max accuracy using layer {}, Kernel: {}, Transform {}. Value: {}'.format(layer, kernelType, trType, acc))
                 best_tr_type = trType
                 best_kernel_type = kernelType
+                max_acc = acc
 
     return max_acc, best_tr_type, best_kernel_type
 
-def find_best_svm_model():
-    modelNames = ['alexnet', 'googlenet']
-    datasetNames = ['amur']
+def find_best_svm_model(dsName, modelNames):
+    # modelNames = ['alexnet', 'googlenet']
+    # modelNames = ['alexnet']
+    # datasetNames = ['amur']
     client = DbInterface()
 
-    overall_max_acc = 0
+    overall_max_acc = -1
     max_acc_layer = None
     max_acc_transform = None
     max_acc_model = None
@@ -110,7 +113,7 @@ def find_best_svm_model():
         f.write('Dataset Name,Model Name,Layer Name,Kernel Type,Transform Type,Accuracy\n')
         f.close()
 
-    for dsName,modelName in [(x,y) for x in datasetNames for y in modelNames]:
+    for modelName in modelNames:
         dbCursor = client.getDB(getDbName(dsName, modelName))
         layerNames = dbCursor.getCollectionNames()
         for layer in layerNames:
@@ -128,6 +131,10 @@ def find_best_svm_model():
     return overall_max_acc,max_acc_layer,max_acc_model,max_acc_transform,best_kernel_type
 
 if __name__ == '__main__':
-    acc,layer,model,transform,kernel = find_best_svm_model()
-    print('\n\nModel testing concluded.\n\n Max Accuracy: {}, Layer: {}, Model: {}, Transform: {}, Kernel: {}'
-            .format(acc,layer,model,transform,kernel) )
+    acc,layer,model,transform,kernel = find_best_svm_model('amur', ['alexnet'])
+    print('\n\nModel testing concluded for Dataset: {}.\n\n Max Accuracy: {}, Layer: {}, Model: {}, Transform: {}, Kernel: {}'
+            .format('amur', acc,layer,model,transform,kernel) )
+
+    acc,layer,model,transform,kernel = find_best_svm_model('elp', ['alexnet'])
+    print('\n\nModel testing concluded for Dataset: {}.\n\n Max Accuracy: {}, Layer: {}, Model: {}, Transform: {}, Kernel: {}'
+            .format('elp', acc,layer,model,transform,kernel) )

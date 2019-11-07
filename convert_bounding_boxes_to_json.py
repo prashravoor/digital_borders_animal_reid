@@ -3,33 +3,57 @@ import json
 import os
 import sys
 
-args = sys.argv
-if not len(args) == 2:
-    print('Usage: {} <Folder name of annotations>'.format(args[0]))
-    exit(1)
+class AmurAnnotationParser:
+    def __init__(self, filename):
+        self.filename = filename
 
-folder = args[1]
-files = ['{}/{}'.format(folder, x.strip()) for x in os.listdir(folder)]
+    def parse(self):
+        self.root = ET.parse(self.filename).getroot()
 
-# n = min(10, len(files))
-# files = files[:n]
-n = len(files)
+    def getBoundingBoxes(self):
+        bboxes = []
+        for bbox in self.root.iter('bndbox'):
+            box = []
+            for point in bbox:
+                box.append(int(point.text))
+            bboxes.append(box)
+        return bboxes
 
-result = {}
-for file in files:
-    root = ET.parse(file).getroot()
-    file_name = os.path.basename(file)
-    image_name = file_name.split('.')[0]
+    def getImageFileName(self):
+        return os.path.dirname(self.filename) \
+                + '/../trainval/' \
+                + os.path.basename(self.filename).split('.')[0] \
+                + '.jpg'
 
-    bboxes = []
-    for bbox in root.iter('bndbox'):
-        box = []
-        for point in bbox:
-            box.append(int(point.text))
-        bboxes.append(box)
+    def getWidth(self):
+        return int(self.root.find('size')[0].text)
 
-    result[image_name] = bboxes
+    def getHeight(self):
+        return int(self.root.find('size')[1].text)
 
-with open('{}.json'.format(folder), 'w') as f:
-    json.dump(result, f)
-    f.close()
+    def getClassName(self):
+        return 'Tiger'
+
+if __name__ == '__main__':
+    args = sys.argv
+    if not len(args) == 2:
+        print('Usage: {} <Folder name of annotations>'.format(args[0]))
+        exit(1)
+
+    folder = args[1]
+    files = ['{}/{}'.format(folder, x.strip()) for x in os.listdir(folder)]
+
+    n = min(10, len(files))
+    files = files[:n]
+    n = len(files)
+
+    result = {}
+    for file in files:
+        obj = AmurAnnotationParser(file)
+        obj.parse()
+        image_name = os.path.basename(file).split('.')[0]
+        result[image_name] = obj.getBoundingBoxes()
+
+    with open('{}.json'.format(folder), 'w') as f:
+        json.dump(result, f)
+        f.close()
