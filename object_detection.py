@@ -25,6 +25,7 @@ class ObjectDetector:
         '''
             Returns list of detection results
         '''
+        '''
         # Resize image as per model need
         width = image.shape[1] 
         height = image.shape[0]
@@ -54,6 +55,9 @@ class ObjectDetector:
                                                iou_threshold=self.IOU_THRESHOLD,
                                                score_threshold=self.SCORE_THRESHOLD)
         
+        if len(indices) == 0:
+            return [] 
+
         det_boxes = np.asarray([det_boxes[x] for x in indices])
         det_scores = np.asarray([det_scores[x] for x in indices])
         det_classes = np.asarray([det_classes[x] for x in indices])
@@ -65,6 +69,8 @@ class ObjectDetector:
                                              det_classes[x])
                                              for x in range(len(indices))]
         return detectionResults 
+        '''
+        return self.getBatchDetectionResults([image])[0]
 
     def getBatchDetectionResults(self, images):
         origDims = [(image.shape[1], image.shape[0]) for image in images]
@@ -85,6 +91,10 @@ class ObjectDetector:
                                                self.MAX_BOXES_PER_IMAGE,
                                                iou_threshold=self.IOU_THRESHOLD,
                                                score_threshold=self.SCORE_THRESHOLD)
+            if len(indices) == 0:
+                detectionResults.append([])
+                continue
+
             boxes = np.asarray([boxes[x] for x in indices])
             scores = np.asarray([det_scores[i][x] for x in indices])
             classes = np.asarray([det_classes[i][x] for x in indices])
@@ -128,7 +138,7 @@ if '__main__' == __name__:
 
     print('Running inference...')
     result = det.getBoundingBoxes(image)
-    print('Found {} boxes'.format(len(result)))
+    print('Found {} boxes: {}'.format(len(result), result))
 
     print('Loading Labels...')
     labels = loadLabels('ssd/label_mapping.csv')

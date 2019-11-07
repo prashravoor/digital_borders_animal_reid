@@ -33,7 +33,7 @@ def evaluateModel(model, imageFiles, expected_classid):
             results = [model.getBoundingBoxes(images[0])]
         else:
             results = model.getBatchDetectionResults(images)
-        runTimes.append( (time.time() - start)/batchSize )
+        runTimes.append(time.time() - start)
 
         for j in range(len(results)):
             imageFile = imageFiles[i+j]
@@ -64,28 +64,44 @@ def evaluateModel(model, imageFiles, expected_classid):
     return runTimes, confidences, invalidClassIds, detResults, wrongImages
 
 def summarizeResult(images, runTimes, confidences, invalidClassIds, wrongDet, wrongImages):
+    print()
+    print('---- Summary ----')
     print('Total Images evaluated: {}, Wrong Detections: {}'.format(len(images), len(wrongImages)))
     print('Accuracy: {:.2f}'.format(1. - len(wrongImages)/float(len(images))))
-    print('Average Runtime: {:.2f}s, Max Time: {:.2f}s, Min Time: {:.2f}s'
-                .format(np.sum(runTimes)/len(images), np.max(runTimes), np.min(runTimes)))
+    print('Total Runtime: {:.2f}, Average Runtime: {:.2f}s, Max Time: {:.2f}s, Min Time: {:.2f}s'
+                .format(np.sum(runTimes), np.sum(runTimes)/len(images), np.max(runTimes), np.min(runTimes)))
     print('Average Confidence Score: {:.2f}, Max: {:.2f}, Min: {:.2f}'
                 .format(np.average(confidences), np.max(confidences), np.min(confidences)))
     print('Invalid Class Id List: {}'.format(invalidClassIds))
+    print()
 
 def showMisclassifications(wrongImages, wrongDets, labels, title):
-    rows = int(len(wrongImages) ** .5) + 1
+
+    if len(wrongImages) > 9:
+        print('Showing first 9 misclassifications')
+        wrongImages = wrongImages[:9]
+        wrongDets = wrongDets[:9]
+
+    rows = min(int(len(wrongImages) ** .5) + 1, 3)
 
     fig = plt.figure(figsize=(10,10))
     gs2 = gridspec.GridSpec(rows, rows)
     for i in range(len(wrongImages)):
         image = cv2.imread(wrongImages[i])
         ax = plt.subplot(gs2[i])
-        plt.axis('off')
+        # plt.axis('off')
+        classes = []
         for res in wrongDets[i]:
-            image = drawBoundingBoxWithLabel(image, res, labels)
+            image = drawBoundingBoxWithLabel(image, res, labels, thickness=5)
+            classes.append(labels[res.classid])
         image = cv2.resize(image, (300,300))
         ax.imshow(image[:,:,(2,1,0)])
-        ax.set_title(wrongImages[i])
+        ax.set_title(os.path.basename(wrongImages[i]))
+        ax.set_xlabel('Detections: {}'.format(classes))
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xticks([])
+        ax.set_yticks([])
 
     fig.canvas.set_window_title(title)
     fig.tight_layout()
@@ -150,9 +166,9 @@ if len(args) == 3:
 yolo_labels = loadYoloLabels('../darknet/darknet/data/coco.names')
 yolo_expected_classid = 20 # Elephant. Tiger is not available
 
-model = YoloObjectDetector('../darknet/darknet/cfg/yolov3.cfg', '../darknet/darknet/yolov3.weights')
+#model = YoloObjectDetector('../darknet/darknet/cfg/yolov3.cfg', '../darknet/darknet/yolov3.weights')
 
-runModelMetrics(model, images, yolo_labels, yolo_expected_classid, 'YOLO')
+#runModelMetrics(model, images, yolo_labels, yolo_expected_classid, 'YOLO')
 
 print()
 model = ObjectDetector('ssd/saved_model')
