@@ -43,8 +43,8 @@ if __name__ == '__main__':
     folder = args[1]
     files = ['{}/{}'.format(folder, x.strip()) for x in os.listdir(folder)]
 
-    n = min(10, len(files))
-    files = files[:n]
+    # n = min(10, len(files))
+    # files = files[:n]
     n = len(files)
 
     result = {}

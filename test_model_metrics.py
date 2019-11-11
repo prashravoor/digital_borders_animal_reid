@@ -22,7 +22,7 @@ def evaluateModel(model, imageFiles, expected_classid):
         batchSize = 1
         yolo = True
 
-    n = min(100, len(imageFiles))
+    n = min(10000, len(imageFiles))
     imageFiles = imageFiles[:n]
     print('Running Inference on {} images, batching {} images at a time'.format(len(imageFiles), batchSize))
     for i in range(0,len(imageFiles),batchSize):
@@ -39,7 +39,7 @@ def evaluateModel(model, imageFiles, expected_classid):
             imageFile = imageFiles[i+j]
             result = results[j]
             wrong = False
-            if not len(result) == 1:
+            if len(result) == 0:
                 print('Incorrect number of detections for image {}: {}'.format(imageFile, len(result)))
                 wrong = True
 
@@ -166,9 +166,9 @@ if len(args) == 3:
 yolo_labels = loadYoloLabels('../darknet/darknet/data/coco.names')
 yolo_expected_classid = 20 # Elephant. Tiger is not available
 
-#model = YoloObjectDetector('../darknet/darknet/cfg/yolov3.cfg', '../darknet/darknet/yolov3.weights')
+model = YoloObjectDetector('../darknet/darknet/cfg/yolov3.cfg', '../darknet/darknet/yolov3.weights')
 
-#runModelMetrics(model, images, yolo_labels, yolo_expected_classid, 'YOLO')
+runModelMetrics(model, images, yolo_labels, yolo_expected_classid, 'YOLO')
 
 print()
 model = ObjectDetector('ssd/saved_model')

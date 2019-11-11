@@ -102,3 +102,19 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+*.zip
+*.tar.gz
+
+*bck
+*.csv
+
+notebooks/Untitled*
+
+ELPephants
+amur
+inception
+
+*.caffemodel
+*.binaryproto
+*.pb
