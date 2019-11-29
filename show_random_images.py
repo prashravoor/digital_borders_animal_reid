@@ -8,12 +8,15 @@ import matplotlib.gridspec as gridspec
 NUM_IMAGES = 16
 amur = 'amur/plain_reid_train/train'
 elp = 'ELPephants/images'
+amur_det = 'amur/detection_train/trainval'
 new_size = (416,416)
 
 def loadLabels(folder):
     result = {}
     if 'amur' in folder:
         file = '{}/{}'.format(folder, 'reid_list_train.csv')
+        if not os.path.exists(file):
+            return result
         with open(file) as f:
             lines = [x.strip() for x in f.readlines()]
             f.close()
@@ -59,7 +62,6 @@ def showImagesInFolder(folder, numImages):
         ax.set_title('Id: {}'.format(label))
         ax.imshow(image)
     gs.tight_layout(fig)
-    plt.show()
 
 def showSubjectImages(folder, numImages):
     labels = loadLabels(folder)
@@ -92,13 +94,14 @@ def showSubjectImages(folder, numImages):
         image = image[:,:,(2,1,0)] # CV2 reads image in BGR. Convert to RGB
         ax.imshow(image)
     gs.tight_layout(fig)
-    plt.show()
 
 
 if __name__ == '__main__':
     showImagesInFolder(elp, NUM_IMAGES)
     showImagesInFolder(amur, NUM_IMAGES)
+    showImagesInFolder(amur_det, NUM_IMAGES)
 
     SUB_IMAGES = 9
     showSubjectImages(amur, SUB_IMAGES)
     showSubjectImages(elp, SUB_IMAGES)
+    plt.show()

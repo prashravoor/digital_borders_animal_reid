@@ -46,7 +46,7 @@ def evaluateModel(model, imageFiles, expected_classid):
             confidence = 0.
             if len(result) > 0:
                 result = result[0]
-                if not result.classid == expected_classid:
+                if not result.classid in expected_classid:
                     print('Incorrect detection for imageFile {}, Expected Class Id: {}, Actual: {}'
                             .format(imageFile, expected_classid, result.classid))
                     wrong = True
@@ -163,18 +163,21 @@ if len(args) == 3:
     maxImages = int(args[2])
     images = images[:maxImages]
 
-yolo_labels = loadYoloLabels('../darknet/darknet/data/coco.names')
-yolo_expected_classid = 20 # Elephant. Tiger is not available
+# yolo_labels = loadYoloLabels('../darknet/darknet/data/coco.names')
+# yolo_expected_classid = 20 # Elephant. Tiger is not available
 
-model = YoloObjectDetector('../darknet/darknet/cfg/yolov3.cfg', '../darknet/darknet/yolov3.weights')
+# model = YoloObjectDetector('../darknet/darknet/cfg/yolov3.cfg', '../darknet/darknet/yolov3.weights')
 
-runModelMetrics(model, images, yolo_labels, yolo_expected_classid, 'YOLO')
+# runModelMetrics(model, images, yolo_labels, yolo_expected_classid, 'YOLO')
 
 print()
 model = ObjectDetector('ssd/saved_model')
-ssd_expected_classid = 388 # Tiger
-if 'amur' not in folder:
-    ssd_expected_classid = 448
+if 'amur' in folder:
+    ssd_expected_classid = [388] # Tiger
+elif 'elp' in folder:
+    ssd_expected_classid = [448]
+else:
+    ssd_expected_classid = [275, 451, 458]
 
 ssd_labels = loadSsdLabels('ssd/label_mapping.csv')
 
