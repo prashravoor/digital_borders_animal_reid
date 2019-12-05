@@ -9,7 +9,8 @@ if len(args) < 2:
     exit(1)
 
 saved_models = 'svm_models_trained'
-modelNames = ['googlenet', 'resnet50', 'alexnet']
+#modelNames = ['googlenet', 'resnet50', 'alexnet']
+modelNames = ['alexnet', 'googlenet']
 extractFeaturesForImages(modelNames,args[1:])
 print()
 print('All features extracted and stored to DB, beginning SVM training')
@@ -30,8 +31,8 @@ for dsName in dsNames:
     print('Average prediction time for single image: {:.4f}s'.format(avg_time))
 
     # Remove all other models for DS
-    lr_name = layer.replace('/', '&')
-    best_model = '{}/{}-{}-{}-{}-{}.model'.format(saved_models, dsName, model, lr_name, kernel, transform)
-    for f in os.listdir(saved_models):
-        if not f == best_model:
-            os.remove(f)
+    #lr_name = layer.replace('/', '&')
+    #best_model = os.path.join(saved_models,'{}-{}-{}-{}-{}.model'.format(dsName, model, lr_name, kernel, transform))
+    #for f in os.listdir(saved_models):
+    #    if not f == best_model:
+    #       os.remove(os.path.join(saved_models,f))

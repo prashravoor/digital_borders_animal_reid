@@ -7,7 +7,6 @@ import os
 import sys
 from db_interface import DbRecord,DbInterface
 from object_detection import ObjectDetector
-from sklearn.preprocessing import MinMaxScaler,StandardScaler
 
 def initializeDB(client, dbName):
     cursor = client.getDB(dbName)
@@ -70,13 +69,6 @@ def perform_global_average_pooling(feature):
     #    return np.mean(feature, axis=1)
     return feature
 
-def normalize_activations(feature):
-    orig_shape = feature.shape
-    feature = feature.flatten().reshape((-1,1)) # Convert to single sample of 1d array
-    #feature = MinMaxScaler(feature_range=(-1,1)).fit_transform(feature)
-    feature = StandardScaler().fit_transform(feature)
-    return feature.reshape(orig_shape)
-
 def processImagesAndStoreFeatures(client, datasetName, modelName, modelsDict, imagesList, idsList, detector):
     network = modelsDict[modelName]
     layerNames = network.getLayerNames()
@@ -89,20 +81,12 @@ def processImagesAndStoreFeatures(client, datasetName, modelName, modelsDict, im
         subset = True
 
     for i in range(len(imagesList)):
-        features = extractFeaturesForImage(network, modelName, layerNames, imagesList[i], detector)
-        if subset:
-            features = [features[x] for x in range(len(features)) if inAny(layerNames[x], pick_layers)]
-
-        # Normalize activations
-        features = [normalize_activations(x) for x in features]
-        for y in range(len(features)):
-            f = features[y]
-            #assert ((f >= 0).all() and (f <= 1).all())
-            assert not (f == float('nan')).any()
-
-        for j in range(len(features)):
-            rec = DbRecord(idsList[i], imagesList[i], perform_global_average_pooling(features[j]))
-            cursor.insertAsync(layerNames[j], rec)
+        for layer in layerNames:
+            if inAny(layer, pick_layers):
+                features = extractFeaturesForImage(network, modelName, [layer], imagesList[i], detector)[0]
+                assert not (features == float('nan')).any()
+                rec = DbRecord(idsList[i], imagesList[i], perform_global_average_pooling(features))
+                cursor.insertAsync(layer, rec)
 
 def readIdsForImages(imagesList, setType, keyfile):
     ids = []
@@ -138,6 +122,10 @@ def randomized_samples(path, keyfile='normalized_class_mapping.txt', max_files=6
             reverse_map[i[1]] = []
         reverse_map[i[1]].append(i[0])
 
+    imageList = pickImages(reverse_map, min_images, max_files, seed)
+    return [os.path.join(path,x) for x in imageList]
+
+def pickImages(reverse_map, min_images, max_files, seed):
     id_lens = [[k, v] for k,v in reverse_map.items() if len(v) >= min_images]
     id_lens = sorted(id_lens, key=lambda x: -len(x[1])) # Sort in descending order of lengths
     i = 0
@@ -149,10 +137,10 @@ def randomized_samples(path, keyfile='normalized_class_mapping.txt', max_files=6
 
         if i == 0 and len(id_lens[i][1]) < 4:
             # Remove some ids
-            cur_files = sum([len(x[1]) for x in id_lens])
-            n = int((cur_files - max_files)/3) # At this point, each id has max 3 images
-            pick = np.random.choice(range(len(id_lens)), n)
-            id_lens = [id_lens[x] for x in range(len(id_lens)) if x not in pick]
+            #cur_files = sum([len(x[1]) for x in id_lens])
+            #n = int((cur_files - max_files)/3) # At this point, each id has max 3 images
+            #pick = np.random.choice(range(len(id_lens)), n)
+            #id_lens = [id_lens[x] for x in range(len(id_lens)) if x not in pick]
             break
 
         if len(id_lens[i]) == 2 and len(id_lens[i][1]) < 4:
@@ -160,7 +148,7 @@ def randomized_samples(path, keyfile='normalized_class_mapping.txt', max_files=6
             continue
 
         n = max(1, int(.25 * len(id_lens[i][1])))
-        pick = np.random.choice(id_lens[i][1], n)
+        pick = np.random.choice(id_lens[i][1], n, replace=False)
         # Modify entry in place, remove all elements from id_lens which are in pick
         id_lens[i][1] = [x for x in id_lens[i][1] if x not in pick]
         i = (i + 1) % len(id_lens)
@@ -169,8 +157,7 @@ def randomized_samples(path, keyfile='normalized_class_mapping.txt', max_files=6
     for x in id_lens:
         imageList.extend(x[1])
 
-    return [os.path.join(path,x) for x in imageList]
-
+    return imageList
 
 def run_job(path, det, modelsDict, modelNames):
     # Read Images from folder
@@ -239,6 +226,6 @@ def extractFeaturesForImages(modelNames, args):
 
 if __name__ == '__main__':
     # modelNames = ['alexnet', 'googlenet', 'resnet50']
-    modelNames = ['alexnet']
+    modelNames = ['googlenet']
     extractFeaturesForImages(modelNames, sys.argv[1:])
 
