@@ -41,19 +41,32 @@ def transformFeature(features, trType=None):
             #f /= (max(10e-8, abs_sum))
 
             # Converting f to a symmetric matrix (square)
-            f = f @ f.T
+            f = f.T @ f
             f = f + 10e-5*np.identity(f.shape[0]) # Add a small Identity matrix to prevent f from being all 0s
             res = scipy.linalg.logm(f) # Matrix logarithm
             #res = np.tril(res) # Retain only lower triangle elements, since this is a symmetric matrix
             return res.flatten()
+            #f += 10e-3
+            #return np.log(f)
 
         features = [x.flatten() for x in features]
-        pca = TruncatedSVD(n_components=512).fit(features)
+        pca = TruncatedSVD(n_components=128).fit(features)
         features = pca.transform(features)
-        return np.array([matrixLog(f) for f in features]), pca
+        return np.array([matrixLog(f) for f in features]), None#, pca
         #if features[0].size > (2048 * 2048): # Reduce using PCA since the matrix is too large
         #    print('Size of matrix is {}, applying PCA to reduce dimensions'.format(features[0].size)) 
         #    features = PCA(n_components=0.95).fit_transform([x.flatten() for x in features])
+    elif trType == 'gap':
+        def gap(f):
+            if len(f.shape) >=3 :
+                return np.average(x, axis=1)
+            return np.log(f)       
+
+        if len(features.shape) >= 3:
+           gap = np.array([np.average(x, axis=1) for x in features])
+           return gap, None
+
+        return np.log(features), None 
             
     return np.array([tr(feature) for feature in features]), None
 
@@ -89,7 +102,7 @@ def train_val_split_closedset(x, y, percent=.25, min_entries=3, seed=12924):
     
     # Filter out ids that don't have min number of images
     id_indices_map = {k:v for k,v in id_indices_map.items() if len(v) >= min_entries}
-    
+
     # For each id, split percent of entries randomly and separate them
     train_x_indices = []
     test_x_indices = []
@@ -106,7 +119,7 @@ def train_val_split_closedset(x, y, percent=.25, min_entries=3, seed=12924):
         tr_x = [id_indices_map[i][x] for x in range(l) if x not in pick] # Remaining goes to training set
         te_y = [i for _ in range(len(te_x))] # All Test ids = i
         tr_y = [i for _ in range(len(tr_x))] # All Train ids = i
-        
+
         train_x_indices.extend(tr_x)
         test_x_indices.extend(te_x)
         train_y.extend(tr_y)
@@ -138,7 +151,7 @@ def train_svm_for_layer(client, datasetName, modelName, layer, outfile, imageNam
     with open(outfile) as f:
         completed = [AccRecord(*x.strip().split(',')) for x in f.readlines()[1:]]
 
-    for trType in [None, 'pca']: # trType in [None, 'pca', 'logm']:
+    for trType in ['pca']: # trType in [None, 'pca', 'logm']:
         tmp = [x for x in completed if 
                     x.datasetName == datasetName and x.modelName == modelName
                     and x.layer == layer and x.transform == str(trType) and x.kernel in ['rbf', 'linear']]
@@ -148,6 +161,7 @@ def train_svm_for_layer(client, datasetName, modelName, layer, outfile, imageNam
 
         # The 4 statements can be moved outside the loop, but then they would be continuously in memory
         # Add them here so that they can be safely deleted to make memory for expensive SVM operations
+        dbStart = time.time()
         records = [dbCursor.getRecord(layer, recordId) for recordId in dbCursor.getRecordIds(layer)]
         """
         records = []
@@ -158,12 +172,15 @@ def train_svm_for_layer(client, datasetName, modelName, layer, outfile, imageNam
         """
         # Normalize activations
         obs = np.array([normalize_activations(x.feature) for x in records])
+        dbEnd = time.time()
         #obs = np.array([normalize_activations(x) for x in obs])
         target = [x.animalId for x in records]
         del records
 
         try:
+            pcaStart = time.time()
             samples,pca_model = transformFeature(obs, trType)
+            pcaEnd = time.time()
         except ValueError as e:
             print('Transformation {} couldnt be applied for layer {}: {}, skipping it'.format(trType, layer, e))
             writeResultToFile(outfile, datasetName, modelName, layer, '-', trType, -1.0)
@@ -174,10 +191,10 @@ def train_svm_for_layer(client, datasetName, modelName, layer, outfile, imageNam
         # X_train, X_test, y_train, y_test = train_test_split(samples, target, test_size=0.25)
         X_train_indices, y_train, X_test_indices, y_test = train_val_split_closedset(samples, target)
 
-        for kernelType in ['rbf', 'linear']:
+        for kernelType in ['linear', 'rbf']:
             tmp = [x for x in completed if 
                     x.datasetName == datasetName and x.modelName == modelName
-                    and x.layer == layer and x.transform == trType and x.kernel == kernelType]
+                    and x.layer == layer and x.transform == str(trType) and x.kernel == kernelType]
             if len(tmp) >= 1:
                 print('Found already completed record for SVM Model with kernel {}, for layer {}, transform {}: {}, skipping'.format(kernelType, layer, trType, modelName))
                 continue
@@ -185,7 +202,9 @@ def train_svm_for_layer(client, datasetName, modelName, layer, outfile, imageNam
             print('Attempting to fit kernel {}, using transform {}'.format(kernelType, trType))
             svmModel = createSvmModel(kernelType)
             try:
+                svmStart = time.time()
                 svmModel.fit([samples[x] for x in X_train_indices] , y_train)
+                svmEnd = time.time()
             except ValueError as e:
                 print('Failed to fit SVM model with kernel {}, for layer {}, transform {}: {}, skipping'.format(kernelType, layer, trType, e))
                 writeResultToFile(outfile, datasetName, modelName, layer, kernelType, trType, -1.0)
@@ -211,9 +230,11 @@ def train_svm_for_layer(client, datasetName, modelName, layer, outfile, imageNam
                 best = os.path.join(saved_models, '{}-{}-{}-{}-{}.model'.format(datasetName, modelName, lr_name, kernelType, trType))
                 dump((svmModel, pca_model, set(target)), best)
 
-                if prev_best is not None and os.path.exists(prev_best):
+                if prev_best is not None: # and os.path.exists(prev_best):
                     os.remove(prev_best)
                 prev_best = best
+            print('Finished Fitting model for Kernel {}, Transform: {}, Acc: {:.4f}, DB Read and transform: {:.4f}s, PCA Time: {:.4f}s, SVM Fit time: {:.4f}s'.format(
+                            kernelType, str(trType), acc, dbEnd - dbStart, pcaEnd - pcaStart, svmEnd - svmStart)) 
 
     avg_time = sum_times
     if count > 0:
@@ -301,7 +322,7 @@ def find_best_svm_model(dsName, modelNames):
 if __name__ == '__main__':
     modelNames = ['alexnet', 'resnet50']
     #modelNames = ['googlenet']
-    datasets = ['amur']
+    datasets = ['elp']
 
     for ds in datasets:
         print('Starting training over Dataset {} using Models: {}'.format(ds, modelNames))

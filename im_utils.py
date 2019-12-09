@@ -17,7 +17,17 @@ def drawBoundingBoxWithLabel(image, res, labels, color=(0,255,0), thickness=2):
     top_left = (res.bounding_box.xmin, res.bounding_box.ymin)
     bottom_right = (res.bounding_box.xmax, res.bounding_box.ymax)
     label = '{}: {:.2f}'.format(labels[res.classid], res.confidence)
+    return drawBoundinbBoxLabel(image, res, label, color, thickness)
+
+def drawBoundingBoxLabel(image, label, res, color=(0,255,0), thickness=2):
+    top_left = (res.bounding_box.xmin, res.bounding_box.ymin)
+    bottom_right = (res.bounding_box.xmax, res.bounding_box.ymax)
     image = cv2.rectangle(image, top_left, bottom_right, color, thickness)
+    if top_left[0] < 20:
+        top_left = (top_left[0]+20, top_left[1])
+    if top_left[1] < 20:
+        top_left = (top_left[0], top_left[1]+20)
+
     return drawLabel(image, top_left, label, thickness=thickness)
 
 def iou(pred_box, gt_box):
