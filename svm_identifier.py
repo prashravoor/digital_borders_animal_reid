@@ -24,7 +24,7 @@ class SvmIdentifier:
 
         if self.dsName == 'amur':
             self.expected_ids = [388, 446, 242, 413] #388 is the only correct one 
-        elif self.dsName == 'elp':
+        elif self.dsName == 'elp' or self.dsName == 'elpfaces':
             self.expected_ids = [448]
         else:
             self.expected_ids = [275, 451, 458]
@@ -33,7 +33,7 @@ class SvmIdentifier:
         if self.modelName == 'alexnet':
             self.size = (227,227)
         else:
-            self.size = (224,224)
+            self.size = (256,256)
 
         self.kernelType = parts[3]
         self.layer = parts[2].replace('&', '/')
@@ -64,6 +64,12 @@ class SvmIdentifier:
                 det_id = self.getIdFromBoundingBox(image, bbox)
 
             detections.append(DetectionResult(bbox, result.classid, det_id))
+
+        if len(detections) == 0:
+            # Use whole image
+            bbox = BoundingBox(0,0,image.shape[1],image.shape[0])
+            det_id = self.getIdFromBoundingBox(image, bbox)
+            detections.append(DetectionResult(bbox, 'N/A', det_id))
 
         return detections
 

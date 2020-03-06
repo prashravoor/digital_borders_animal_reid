@@ -9,6 +9,8 @@ NUM_IMAGES = 16
 amur = 'amur/plain_reid_train/train'
 elp = 'ELPephants/images'
 amur_det = 'amur/detection_train/trainval'
+jaguar = 'jaguars/reid'
+jaguar_det = 'jaguars/'
 new_size = (416,416)
 
 def loadLabels(folder):
@@ -55,11 +57,11 @@ def showImagesInFolder(folder, numImages):
         image = cv2.imread(imname)
         image = cv2.resize(image, new_size)
         image = image[:,:,(2,1,0)] # CV2 reads image in BGR. Convert to RGB
-        if not imname in labels:
-            label = 'Test'
-        else:
-            label = labels[imname]
-        ax.set_title('Id: {}'.format(label))
+        #if not imname in labels:
+        #    label = 'Test'
+        #else:
+        #    label = labels[imname]
+        #ax.set_title('Id: {}'.format(label))
         ax.imshow(image)
     gs.tight_layout(fig)
 
@@ -87,12 +89,14 @@ def showSubjectImages(folder, numImages):
     for i in np.random.choice(range(len(sub_images)), numImages):
         ax = plt.subplot(gs[k])
         k += 1
-        plt.axis('off')
         imname = sub_images[i]
         image = cv2.imread(imname)
+        if image is None:
+            continue
         image = cv2.resize(image, new_size)
         image = image[:,:,(2,1,0)] # CV2 reads image in BGR. Convert to RGB
         ax.imshow(image)
+        plt.axis('off')
     gs.tight_layout(fig)
 
 
@@ -100,8 +104,11 @@ if __name__ == '__main__':
     showImagesInFolder(elp, NUM_IMAGES)
     showImagesInFolder(amur, NUM_IMAGES)
     showImagesInFolder(amur_det, NUM_IMAGES)
+    showImagesInFolder(jaguar, NUM_IMAGES)
+    showImagesInFolder(jaguar_det, NUM_IMAGES)
 
     SUB_IMAGES = 9
     showSubjectImages(amur, SUB_IMAGES)
     showSubjectImages(elp, SUB_IMAGES)
+    showSubjectImages(jaguar, SUB_IMAGES)
     plt.show()

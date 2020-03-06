@@ -87,15 +87,23 @@ with open(args[2]) as f:
     f.close()
 
 print('Loading Object Detector...')
-det = ObjectDetector('ssd/saved_model')
+det = ObjectDetector('ssd_quantized_1L_steps/saved_model')
 det.loadModel()
+#det.SCORE_THRESHOLD = 0.25
+#det.IOU_THRESHOLD = 0.01
 
 print('Warming up model...')
 det.getBoundingBoxes(cv2.imread(imageFiles[0]))
 det.getBoundingBoxes(cv2.imread(imageFiles[0]))
 
 batchSize = 10
-expected_classid = 388 # Only tigers
+if 'jaguar' in folder.lower():
+    expected_classid = 1 # Only tigers
+elif 'elp' in folder.lower() or 'elephant' in folder.lower():
+    expected_classid = 2
+elif 'amur' in folder.lower():
+    expected_classid = 3
+
 mAP = 0.
 numBoxes = 0
 wrong = 0
@@ -132,9 +140,10 @@ for i in range(0,n,batchSize):
         mAP += find_average_iou(box_pairs, len(ground_truth))
         numBoxes += len(ground_truth)
 
+tt = time.time() - start
 print()
 print('------- Summary -------')
-print('Total runtime for {} images: {:.2f}s'.format(n, (time.time() - start)))
-print('Total Number of Boxes over {} images: {}, Predicted Boxes: {}, Correctly classified: {}, Accuracy: {:.2f}'
-        .format(n, numBoxes, wrong+correct, correct, (float(correct)/numBoxes)))
+print('Total runtime for {} images: {:.2f}s, Average detection time: {:.4f}s'.format(n, tt, tt/float(n)))
+print('Total Number of Boxes over {} images: {}, Predicted Boxes: {}, Correctly classified: {}, Accuracy: {:.2f}, False Positive Rate: {:.4f}'
+        .format(n, numBoxes, wrong+correct, correct, (float(correct)/numBoxes), float(wrong/(wrong+correct))))
 print('Final mAP: {:.2f}'.format(mAP/n))

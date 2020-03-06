@@ -41,7 +41,7 @@ if __name__ == '__main__':
         exit(1)
 
     folder = args[1]
-    files = ['{}/{}'.format(folder, x.strip()) for x in os.listdir(folder)]
+    files = ['{}/{}'.format(folder, x.strip()) for x in os.listdir(folder) if x.endswith('.xml')]
 
     # n = min(10, len(files))
     # files = files[:n]

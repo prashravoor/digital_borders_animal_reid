@@ -15,7 +15,8 @@ class ObjectDetector:
         self.model = None
         self.MAX_BOXES_PER_IMAGE = 100
         self.IOU_THRESHOLD = 0.5
-        self.SCORE_THRESHOLD = 0.1
+        #self.SCORE_THRESHOLD = 0.1
+        self.SCORE_THRESHOLD = 0.4
 
     def loadModel(self):
         self.model = tf.saved_model.load(self.model_path, tags=None)
