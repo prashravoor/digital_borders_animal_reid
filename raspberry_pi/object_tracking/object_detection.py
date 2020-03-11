@@ -1,10 +1,7 @@
 import numpy as np
 from tflite_runtime.interpreter import Interpreter
 import cv2
-from collections import namedtuple
-
-BoundingBox = namedtuple('BoundingBox', 'ymin xmin ymax xmax')
-DetectionResult = namedtuple('DetectionResult', 'bounding_box confidence classid')
+from utils import BoundingBox, DetectionResult
 
 class ObjectDetector:
     def __init__(self, modelpath, width=300, height=300, numthreads=4):

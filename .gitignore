@@ -114,7 +114,22 @@ notebooks/Untitled*
 ELPephants
 amur
 inception
+amur_small
+elp_small
+jaguars
+jaguars_small
 
 *.caffemodel
 *.binaryproto
 *.pb
+*.ipynb
+*.tflite
+*.model
+*.tgz
+
+ssd
+fine_tuned*
+fpn_*
+quantized_*
+ssd_*
+results_*
