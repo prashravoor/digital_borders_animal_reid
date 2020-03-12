@@ -62,7 +62,11 @@ For the ELP dataset, the train and validation splits are already provided under 
 The official TFLite provided by Google is rather slow. Install the alternative compiled version provided by PINTO as mentioned in the corresponding readme
 Install MQTT using `python3 -m pip install mqtt` <br>
 On a laptop / desktop, setup the MQTT broker service using `sudo apt install mosquitto` <br>
-Provide values for the MQTT server in the Raspberry Pi code files, and run the program
+Provide values for the MQTT server in the Raspberry Pi code files, and run the program <br>
+Before running any of the MQTT programs, setup the PYTHONPATH correctly using `export PYTHONPATH=$PYTHONPATH:<Repo base dir>` <br>
+
+## Tracking
+Run the subscriber program on the laptop using `python3 raspberry_pi/mqtt/subscriber.py` to start the listening service for the tracking
 
 # Identification Pipeline with Triplet loss
 ## Setup
@@ -72,5 +76,6 @@ Install the following required packages for using the Identification pipeline by
 Once the model has been trained (using the open-reid strong baseline repo), copy the model and convert it to an ONNX model using <br>
 `bash convert_torch_to_onnx.sh <input model path> <output model path>` <br>
 Conversion to ONNX is required since PyTorch on CPU is extremely slow. <br>
-Run the code to test feature extraction accuracy and show the TSNE graphs using `python3 test_triplet_loss.py`
+Run the code to test feature extraction accuracy and show the TSNE graphs using `python3 test_triplet_loss.py <image folder> <ONNX model path>`
+
 

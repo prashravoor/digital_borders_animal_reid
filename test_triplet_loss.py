@@ -1,4 +1,5 @@
 import sys
+from sys import exit
 from feature_extractor import FeatureExtractor
 import cv2
 import os
@@ -92,65 +93,66 @@ def mapLabelsToContinousInts(y_train, y_val):
     y_val = [id_map[x] for x in y_val]
     return y_train, y_val
 
-args = sys.argv
-if not len(args) == 3:
-    print('Usage: cmd imagefolder modelpath')
-    exit()
-
-folder = args[1]
-modelpath = args[2]
-
-md_file = os.path.join(folder, 'normalized_class_mapping.txt')
-if not os.path.exists(md_file):
-    md_file = os.path.join(folder, 'class_mapping.txt')
-    if not os.path.exists(md_file):
-        print('No metadata found in folder {}'.format(folder))
+if __name__ == '__main__':
+    args = sys.argv
+    if not len(args) == 3:
+        print('Usage: cmd imagefolder modelpath')
         exit()
 
-fe = FeatureExtractor(modelpath)
-print('Loading Model...')
-start = time.time()
-fe.loadModel()
-print('Warming up model...')
-fe.extract(cv2.imread('amur_small/002019.jpg'))
-print('Total time to load model: {:.4f}s'.format(time.time() - start))
+    folder = args[1]
+    modelpath = args[2]
 
-x_train_names, y_train, x_val_names, y_val = getTrainValData(folder, md_file)
-print('Train classes: {}, Valid Classes: {}'.format(len(set(y_train)), len(set(y_val))))
-print('Total Train images: {}, Total validation images: {}'.format(len(x_train_names), len(x_val_names)))
+    md_file = os.path.join(folder, 'normalized_class_mapping.txt')
+    if not os.path.exists(md_file):
+        md_file = os.path.join(folder, 'class_mapping.txt')
+        if not os.path.exists(md_file):
+            print('No metadata found in folder {}'.format(folder))
+            exit()
 
-print('Extracting features...This could take a while...')
-start = time.time()
+    fe = FeatureExtractor(modelpath)
+    print('Loading Model...')
+    start = time.time()
+    fe.loadModel()
+    print('Warming up model...')
+    fe.extract(cv2.imread('amur_small/002019.jpg'))
+    print('Total time to load model: {:.4f}s'.format(time.time() - start))
+
+    x_train_names, y_train, x_val_names, y_val = getTrainValData(folder, md_file)
+    print('Train classes: {}, Valid Classes: {}'.format(len(set(y_train)), len(set(y_val))))
+    print('Total Train images: {}, Total validation images: {}'.format(len(x_train_names), len(x_val_names)))
+
+    print('Extracting features...This could take a while...')
+    start = time.time()
 # Extract feature for each image in training set
-x_train = np.asarray([fe.extract(cv2.imread(x)) for x in x_train_names])
-x_val = np.asarray([fe.extract(cv2.imread(x)) for x in x_val_names])
-total_time = time.time() - start
+    x_train = np.asarray([fe.extract(cv2.imread(x)) for x in x_train_names])
+    x_val = np.asarray([fe.extract(cv2.imread(x)) for x in x_val_names])
+    total_time = time.time() - start
 
-print('Total Feature extraction time: {:.4f}s, Average time per feature extraction: {:.4f}s'.format(total_time, total_time / (len(x_train) + len(x_val))))
+    print('Total Feature extraction time: {:.4f}s, Average time per feature extraction: {:.4f}s'.format(total_time, total_time / (len(x_train) + len(x_val))))
 
-y_train, y_val = mapLabelsToContinousInts(y_train, y_val)
+    y_train, y_val = mapLabelsToContinousInts(y_train, y_val)
 
-print('Fitting SVM...')
-start = time.time()
-svmModel = createSvmModel()
-svmModel = svmModel.fit(x_train, y_train)
-print('Model Fit time: {:.4f}s'.format(time.time() - start))
+    print('Fitting SVM...')
+    start = time.time()
+    svmModel = createSvmModel()
+    svmModel = svmModel.fit(x_train, y_train)
+    print('Model Fit time: {:.4f}s'.format(time.time() - start))
 
-print('Testing Accuracies...')
+    print('Testing Accuracies...')
 
-start = time.time()
-y_pred = svmModel.predict(x_train)
-acc = metrics.accuracy_score(y_train, y_pred)
-print('Training Accuracy: {:.4f}'.format(acc))
+    start = time.time()
+    y_pred = svmModel.predict(x_train)
+    acc = metrics.accuracy_score(y_train, y_pred)
+    print('Training Accuracy: {:.4f}'.format(acc))
 
-y_pred = svmModel.predict(x_val)
-acc = metrics.accuracy_score(y_val, y_pred)
-print('Validation Accuracy: {:.4f}'.format(acc))
-total_time = time.time() - start
+    y_pred = svmModel.predict(x_val)
+    acc = metrics.accuracy_score(y_val, y_pred)
+    print('Validation Accuracy: {:.4f}'.format(acc))
+    total_time = time.time() - start
 
-print('Total Prediction time for {} samples: {:.4f}s, Average prediction time: {:.4f}s'.format(len(x_train) + len(x_val), total_time, total_time / (len(x_train) + len(x_val))))
+    print('Total Prediction time for {} samples: {:.4f}s, Average prediction time: {:.4f}s'.format(len(x_train) + len(x_val), total_time, total_time / (len(x_train) + len(x_val))))
 
-print('Displaying TSNE Graphs...')
-showTsneGraph(x_train, y_train, 'Training Set')
-showTsneGraph(x_val, y_val, 'Validation Set')
-plt.show()
+    print('Displaying TSNE Graphs...')
+    showTsneGraph(x_train, y_train, 'Training Set')
+    showTsneGraph(x_val, y_val, 'Validation Set')
+    plt.show()

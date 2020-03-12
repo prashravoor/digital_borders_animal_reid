@@ -13,6 +13,10 @@ class Tracker:
         self.max_frames = 100
         self.window_size = 2 # Direction for every 2 frames
 
+    def __repr__(self):
+        return 'Tracking Window Size: {}, Current Num Frames: {}, Total Tracklets: {}'.format(
+                        self.window_size, len(self.frames), len(self.tracklets))
+
     def addFrame(self, newBB):
         # Retain only max_frames frames, after which remove older frames
         if len(self.frames) == self.max_frames:
