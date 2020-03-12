@@ -56,3 +56,21 @@ The SVM can then be trained using the `train` subset, and their generalization a
 <br>
 <br>
 For the ELP dataset, the train and validation splits are already provided under `train.txt` and `val.txt`. These are directly used to partition the dataset. <br>
+
+# Raspberry Pi Code
+## Setup
+The official TFLite provided by Google is rather slow. Install the alternative compiled version provided by PINTO as mentioned in the corresponding readme
+Install MQTT using `python3 -m pip install mqtt` <br>
+On a laptop / desktop, setup the MQTT broker service using `sudo apt install mosquitto` <br>
+Provide values for the MQTT server in the Raspberry Pi code files, and run the program
+
+# Identification Pipeline with Triplet loss
+## Setup
+Install the following required packages for using the Identification pipeline by running `python3 -m pip install -r triplet_loss_req.txt` <br>
+
+## Testing model accuracy
+Once the model has been trained (using the open-reid strong baseline repo), copy the model and convert it to an ONNX model using <br>
+`bash convert_torch_to_onnx.sh <input model path> <output model path>` <br>
+Conversion to ONNX is required since PyTorch on CPU is extremely slow. <br>
+Run the code to test feature extraction accuracy and show the TSNE graphs using `python3 test_triplet_loss.py`
+
