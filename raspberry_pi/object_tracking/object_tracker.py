@@ -6,6 +6,43 @@ Tracklet = namedtuple('Tracklet', 'xdir ydir zdir')
 # ydir is veritical movement, one of (u)p, (d)own or (s)tatic
 # zdir is z-axis moveent, one of (i)ncoming, (o)utgoing or (s)tatic
 
+def mergeTracklets(tracklets):
+    # Merge any very similar tracks into single track
+    # If windw_size tracklets differ only in 1 dimension, retain only the latest one and remove older tracklet
+    if len(tracklets) <= 1:
+        return tracklets
+
+    def differ_by_2dim(tr1, tr2):
+        if (tr1.xdir == tr2.xdir and tr1.ydir == tr2.ydir 
+           or tr1.ydir == tr2.ydir and tr1.zdir == tr2.zdir
+           or tr1.xdir == tr2.xdir and tr1.zdir == tr2.zdir):
+            return True
+        return False
+
+    i = -1
+    while abs(i) < len(tracklets):
+        last = tracklets[i]
+        penum = tracklets[i-1]
+        if differ_by_2dim(last, penum):
+            # Retain only last
+            del tracklets[i-1]
+        else:
+            i -= 1
+    
+    if len(tracklets) > 1:
+        # Remove any completely static tracks
+        tracklets = [x for x in tracklets if not x == Tracklet('s', 's', 's')]
+    return tracklets
+
+def getDirections(tracklets):
+    DIR_MAP = {'s': 'Still', 'l': 'Left', 'r': 'Right', 'u': 'Up', 'd': 'Down', 'i': 'Inwards', 'o': 'Outwards'}
+    directions = []
+    for xdir,ydir,zdir in tracklets:
+        directions.append('Horizontally {}, Vertically {}, and {}'.format(
+                DIR_MAP[xdir], DIR_MAP[ydir], DIR_MAP[zdir]))
+
+    return directions
+
 class Tracker:
     def __init__(self, initBB, max_frames=100, window_size=2):
         self.frames = [initBB]
@@ -85,29 +122,6 @@ class Tracker:
 
         return xdir, ydir, zdir
 
-    def _mergeTracks(self):
-        # Merge any very similar tracks into single track
-        # If windw_size tracklets differ only in 1 dimension, retain only the latest one and remove older tracklet
-        if len(self.tracklets) <= 1:
-            return
-
-        def differ_by_2dim(tr1, tr2):
-            if (tr1.xdir == tr2.xdir and tr1.ydir == tr2.ydir 
-               or tr1.ydir == tr2.ydir and tr1.zdir == tr2.zdir
-               or tr1.xdir == tr2.xdir and tr1.zdir == tr2.zdir):
-                return True
-            return False
-
-        i = -1
-        while abs(i) < len(self.tracklets):
-            last = self.tracklets[i]
-            penum = self.tracklets[i-1]
-            if differ_by_2dim(last, penum):
-                # Retain only last
-                del self.tracklets[i-1]
-            else:
-                i -= 1
-
     def getTracklets(self):
-        self._mergeTracks()
+        self.tracklets = mergeTracklets(self.tracklets)
         return self.tracklets
