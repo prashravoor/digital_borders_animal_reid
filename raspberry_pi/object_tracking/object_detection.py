@@ -10,8 +10,8 @@ class ObjectDetector:
         self.IMG_HEIGHT = height
         self.interpreter = None
         self.MAX_BOXES_PER_IMAGE = 10
-        self.IOU_THRESHOLD = 0.01
-        self.SCORE_THRESHOLD = 0.4
+        self.IOU_THRESHOLD = 0.5
+        self.SCORE_THRESHOLD = 0.5
         self.NUM_THREADS = numthreads
 
     def loadModel(self):

@@ -8,5 +8,6 @@ Any additional dependencies, such as Numpy and PiCamera need to be installed usi
 ## Running the Detector
 Once all dependencies are installed, setup the PiCamera module appropriately. Download the quantized model for TFLite. This repo uses a specially trained quantized model, but a TFLite model pretrained on COCO dataset can be found [here](https://storage.googleapis.com/download.tensorflow.org/models/tflite/coco_ssd_mobilenet_v1_1.0_quant_2018_06_29.zip) <br>
 
-Run using `python3 object_tracking/run_object_detection.py <path to tflite model>` <br>
+Run using `python3 object_tracking/run_object_detection.py <path to tflite model> <MQTT broker IP> [display camera images>` <br>
 Each frame processing takes around 350-400ms on average. <br>
+In order to effectively track, ensure that the `subscriber` program is running on the same server as the MQTT broker <br>

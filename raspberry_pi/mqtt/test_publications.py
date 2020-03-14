@@ -1,5 +1,5 @@
 from utils import BoundingBox, DetectionResult
-from mqtt_client import TrackPublisher
+from mqtt_publisher import TrackPublisher
 import sys
 import time
 
