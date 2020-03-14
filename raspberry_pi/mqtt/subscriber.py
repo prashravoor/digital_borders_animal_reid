@@ -3,6 +3,8 @@ import time
 from object_tracker import Tracker, Tracklet, mergeTracklets, getDirections
 from collections import namedtuple, Iterable, defaultdict
 from utils import DetectionResult, BoundingBox
+from mqtt_subscriber import MqttSubscriber
+import threading
 
 TrackedSubject = namedtuple('TrackedSubject', 'tracker timestamp')
 
@@ -18,7 +20,10 @@ class SubjectMonitor:
 
     def _getIdentifier(self, classid):
         # Right now, use class id for mapping tracklets. Replace wth actual identification code here
-        name = '{}_{}'.format(LABELS[classid], 0)
+        if int(classid) not in LABELS:
+            LABELS[int(classid)] = 'Unknown'
+
+        name = '{}_{}'.format(LABELS[int(classid)], 0)
         return name
 
     def addDetection(self, detection, idf=None):
@@ -37,6 +42,11 @@ class SubjectMonitor:
 
         return idf
 
+    def getLatestTracklet(self, idf):
+        if idf in self.detections and len(self.detections[idf].tracker.tracklets) > 0:
+            return self.detections[idf].tracker.tracklets[-1]
+        return None
+
     def getActiveDetections(self):
         # Remove stale tracklets and return all active detections
         curtime = time.time()
@@ -49,10 +59,17 @@ class CrossCameraMonitor:
     def __init__(self, timeout=3000):
         self.registered = dict()
         self.timeout = timeout
+        self.inCounter = defaultdict(int)
+        self.DETER_TIMEOUT = 6
+        self.timerSet = defaultdict(bool)
+        self.AREA_THRESH = 0.3 * (300 * 300) # Covers 50% of the image
+        self.staticMap = defaultdict(bool)
 
     def _getIdentifier(self, detection):
         # Right now, use class id for mapping tracklets. Replace wth actual identification code here
-        name = '{}_{}'.format(LABELS[detection.classid], 0)
+        if int(detection.classid) not in LABELS:
+            LABELS[int(detection.classid)] = 'Unknown'
+        name = '{}_{}'.format(LABELS[int(detection.classid)], 0)
         return name
 
     def addRegistration(self, name):
@@ -63,11 +80,53 @@ class CrossCameraMonitor:
 
     def addDetection(self, name, detection):
         idf = self._getIdentifier(detection)
-        print('Adding detection for {} as {}'.format(name, idf))
         if name in self.registered:
             self.registered[name].addDetection(detection, idf)
+            track = self.registered[name].getLatestTracklet(idf)
+            if track is None:
+                return
+
+            if track.zdir == 'i':
+                self.inCounter[idf] += 1
+                if not self.timerSet[idf]:
+                    self.timerSet[idf] = True
+                # Start timer in case there were no detections
+                    timer = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [idf])
+                    timer.start()
+                    self.staticMap[idf] = False
+            elif track.zdir == 'o':
+                self.inCounter[idf] = 0
+                self.staticMap[idf] = False
+            else:
+                self.staticMap[idf] = True
+
+            if self.inCounter[idf] > 2 or Tracker([])._getBboxArea(detection.bounding_box) > self.AREA_THRESH:
+                print('Glowing LEDS!')
+                print('Glowing LEDS!')
+                print('Glowing LEDS!')
         else:
             print('No registered device for {}'.format(name))
+
+    def timerFunc(self, idf):
+        if self.inCounter[idf] > 0 and not self.staticMap[idf]:
+            print()
+            print('!!!!!!!!!!!!!!!!')
+            print('Deterring animal {} failed, sending SMS'.format(idf))
+            print('!!!!!!!!!!!!!!!!')
+            print()
+            self.timerSet[idf] = False
+        elif self.staticMap[idf]:
+            print()
+            print('Watching animal {} for some more time...'.format(idf))
+            print()
+            self.staticMap[idf] = False
+            threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [idf]).start()
+            self.timerSet[idf] = True
+        else:
+            print()
+            print('Animal {} successfully deterred...'.format(idf))
+            print()
+            self.timerSet[idf] = False
 
     def getActiveDetections(self):
         # Combine tracklets from all registered device, sort them by time first
@@ -114,8 +173,7 @@ class DeviceMonitor:
     
 class CentralServer:
     def __init__(self, server, port=1883):
-        self.server = server
-        self.port = port
+        self.subscriber = MqttSubscriber(server, port)
         self.topic_funcs = {MQTT_REG_PATH : self.register, MQTT_REFRESH: self.refresh}
         self.registrations = []
         self.monitor = CrossCameraMonitor()
@@ -169,6 +227,8 @@ class CentralServer:
         client.subscribe(MQTT_REFRESH)
 
     def run(self):
+        self.subscriber.run(self.onConnect, self.on_message)        
+        '''
         client = mqtt.Client()
         client.on_connect = self.onConnect
         #client.on_message = self.onRegistration
@@ -176,6 +236,7 @@ class CentralServer:
 
         client.connect(self.server, self.port, 60)
         client.loop_forever()
+        '''
 
 if __name__ == '__main__':
     server = CentralServer(MQTT_SERVER)

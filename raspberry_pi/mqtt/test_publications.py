@@ -44,6 +44,35 @@ def test_multi_device_right_right(client):
 
     client.client.channel = orgname
 
+def test_multi_device_incoming(client):
+    org = BoundingBox(20,50,92,122)
+    prev = org 
+    detection = DetectionResult(prev, 0.9, 1)
+
+    # Device one
+    for _ in range(3):
+        client.publishDetection([detection])
+        prev = BoundingBox(prev.ymin+3, prev.xmin-3, prev.ymax+3, prev.xmax-3)
+        prev = BoundingBox(prev.ymin-1, prev.xmin-1, prev.ymax+1, prev.xmax+1)
+        detection = DetectionResult(prev, detection.confidence, detection.classid)
+        time.sleep(1)
+
+    # Device 2
+    orgname = client.client.channel
+    client.client.channel = 'tester2'
+    client.register()
+
+    prev = org 
+    for _ in range(3):
+        client.publishDetection([detection])
+        prev = BoundingBox(prev.ymin-1, prev.xmin-1, prev.ymax+1, prev.xmax+1)
+        detection = DetectionResult(prev, detection.confidence, detection.classid)
+        detection = DetectionResult(prev, detection.confidence, detection.classid)
+        time.sleep(1)
+
+    client.client.channel = orgname
+
+
 
 if __name__ == '__main__':
     server = 'localhost'
@@ -52,7 +81,8 @@ if __name__ == '__main__':
     client.register()
 
     funcs = [#test_left_then_right,
-             test_multi_device_right_right,
+             #test_multi_device_right_right,
+             test_multi_device_incoming,
             ] 
 
     print('Running total {} tests..'.format(len(funcs)))
