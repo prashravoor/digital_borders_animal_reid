@@ -11,3 +11,16 @@ Once all dependencies are installed, setup the PiCamera module appropriately. Do
 Run using `python3 object_tracking/run_object_detection.py <path to tflite model> <MQTT broker IP> [display camera images>` <br>
 Each frame processing takes around 350-400ms on average. <br>
 In order to effectively track, ensure that the `subscriber` program is running on the same server as the MQTT broker <br>
+
+## Setting up the MQTT server
+Angular and other JS frameworks work with MQTT only with web-sockets, and not using regular TCP connection. To enable communication between the local subscriber and the frontend application, add the following to a file (create if needed) `/etc/mosquitto/conf.d/default.conf`: <br>
+```bash
+listener 1883
+protocol mqtt
+
+listener 9001
+protocol websockets
+```
+
+Restart the mosquitto service through `sudo service mosquitto restart`. The python client which listens over MQTT will need to relay the required messages over websockets to the Frontend <br>
+If needed, the front-end can be changed to a standalone application, or some other mechanism can be used instead of MQTT b/w subscriber and frontend <br>
