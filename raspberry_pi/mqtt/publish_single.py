@@ -1,5 +1,6 @@
 import paho.mqtt.publish as publish
 import sys
+import base64
 
 args = sys.argv
 if not len(args) == 4:
@@ -9,5 +10,5 @@ if not len(args) == 4:
 server = args[1]
 channel = args[2]
 message = args[3]
- 
-publish.single(channel, message, hostname=server)
+
+publish.single(channel, message, hostname=server, port=9001, transport='websockets')

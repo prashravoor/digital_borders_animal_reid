@@ -8,6 +8,14 @@ class MqttClient:
     def message(self, message):
         publish.single(self.channel, str(message), hostname=self.server)
 
+class MqttWebsocketClient:
+    def __init__(self, hostname, port=9001):
+        self.server = hostname
+        self.port = port
+
+    def message(self, channel, message):
+        publish.single(channel, str(message), hostname=self.server, port=self.port, transport='websockets')
+
 class TrackPublisher:
     def __init__(self, name, server):
         self.server = server

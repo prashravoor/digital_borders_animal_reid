@@ -4,13 +4,21 @@ from object_tracker import Tracker, Tracklet, mergeTracklets, getDirections
 from collections import namedtuple, Iterable, defaultdict
 from utils import DetectionResult, BoundingBox
 from mqtt_subscriber import MqttSubscriber
+from mqtt_publisher import MqttWebsocketClient
 import threading
+import json
 
 TrackedSubject = namedtuple('TrackedSubject', 'tracker timestamp')
+DetectionInfo = namedtuple('DetectionInfo', 'name activeDetections deterState')
+DetectionHistory = namedtuple('DetectionHistory', 'name lastSeen travelDirection lastSeenTime')
 
 MQTT_SERVER = "localhost"
 MQTT_REG_PATH = "registration"
 MQTT_REFRESH = 'refresh'
+MQTT_FRONTEND_BASE = 'frontend'
+MQTT_FRONTEND_REG = '{}/registration'.format(MQTT_FRONTEND_BASE)
+MQTT_FRONTEND_DET_HISTORY = '{}/detectionHistory'.format(MQTT_FRONTEND_BASE)
+
 LABELS = {1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
 
 class SubjectMonitor:
@@ -53,17 +61,24 @@ class SubjectMonitor:
         # Remove inactive tracks
         self.detections = {k:v for k,v in self.detections.items() if (curtime - v.timestamp) < self.timeout}
 
-        return {k:v.tracker.getTracklets() for k,v in self.detections.items()} 
+        return {k:(v.tracker.getTracklets(), v.timestamp) for k,v in self.detections.items()} 
 
 class CrossCameraMonitor:
-    def __init__(self, timeout=3000):
+    def __init__(self, feClient, timeout=3000):
         self.registered = dict()
+        self.feClient = feClient
         self.timeout = timeout
         self.inCounter = defaultdict(int)
         self.DETER_TIMEOUT = 6
         self.timerSet = defaultdict(bool)
         self.AREA_THRESH = 0.3 * (300 * 300) # Covers 50% of the image
         self.staticMap = defaultdict(bool)
+        self.wasAlerted = defaultdict(bool)
+
+    def sendFeDetectionMessage(self, device, numDetections, deter):
+        channel = '{}/{}'.format(MQTT_FRONTEND_BASE, device)
+        data = DetectionInfo(device, numDetections, deter)
+        self.feClient.message(channel, json.dumps(data._asdict()))
 
     def _getIdentifier(self, detection):
         # Right now, use class id for mapping tracklets. Replace wth actual identification code here
@@ -77,10 +92,13 @@ class CrossCameraMonitor:
             print('{} already registered, ignoring...')
         else:
             self.registered[name] = SubjectMonitor(self.timeout)
+            # Send message to frontend
+            self.feClient.message(MQTT_FRONTEND_REG, name)
 
-    def addDetection(self, name, detection):
+    def addDetection(self, name, detection, numDetections):
         idf = self._getIdentifier(detection)
         if name in self.registered:
+            deterState = None 
             self.registered[name].addDetection(detection, idf)
             track = self.registered[name].getLatestTracklet(idf)
             if track is None:
@@ -91,12 +109,15 @@ class CrossCameraMonitor:
                 if not self.timerSet[idf]:
                     self.timerSet[idf] = True
                 # Start timer in case there were no detections
-                    timer = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [idf])
+                    timer = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf])
                     timer.start()
                     self.staticMap[idf] = False
             elif track.zdir == 'o':
                 self.inCounter[idf] = 0
+                if wasAlerted[idf]:
+                    deterState = 'success'
                 self.staticMap[idf] = False
+                self.wasAlerted[idf] = False
             else:
                 self.staticMap[idf] = True
 
@@ -104,10 +125,13 @@ class CrossCameraMonitor:
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
+                deterState = 'alert'
+                self.wasAlerted[idf] = True
+            self.sendFeDetectionMessage(name, numDetections, deterState)
         else:
             print('No registered device for {}'.format(name))
 
-    def timerFunc(self, idf):
+    def timerFunc(self, name, idf):
         if self.inCounter[idf] > 0 and not self.staticMap[idf]:
             print()
             print('!!!!!!!!!!!!!!!!')
@@ -115,18 +139,22 @@ class CrossCameraMonitor:
             print('!!!!!!!!!!!!!!!!')
             print()
             self.timerSet[idf] = False
+            self.sendFeDetectionMessage(name, 1, 'failed')
+
         elif self.staticMap[idf]:
             print()
             print('Watching animal {} for some more time...'.format(idf))
             print()
             self.staticMap[idf] = False
-            threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [idf]).start()
+            threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf]).start()
             self.timerSet[idf] = True
+            self.sendFeDetectionMessage(name, 1, 'alert')
         else:
             print()
             print('Animal {} successfully deterred...'.format(idf))
             print()
             self.timerSet[idf] = False
+            self.sendFeDetectionMessage(name, 0, 'success')
 
     def getActiveDetections(self):
         # Combine tracklets from all registered device, sort them by time first
@@ -135,7 +163,7 @@ class CrossCameraMonitor:
             dets = reg.getActiveDetections()
             for k,v in dets.items():
                 # Index the detections by classid, across all cameras
-                results[k].append((name, v))
+                results[k].append((name, v[0], v[1]))
 
         return results
 
@@ -162,21 +190,24 @@ class DeviceMonitor:
             if not isinstance(det, DetectionResult):
                 print('Invalid object {}, expected type {}'.format(type(det), DetectionResult))
             else:
-                self.addDetection(det)
+                self.addDetection(det, len(detections))
 
-    def addDetection(self, detection):
+    def addDetection(self, detection, total):
         self.monitor.addDetection(detection)
-        self.centralMonitor.addDetection(self.name, detection)
+        self.centralMonitor.addDetection(self.name, detection, total)
 
     def getActiveTracks(self):
         return self.monitor.getActiveDetections()
     
 class CentralServer:
-    def __init__(self, server, port=1883):
+    def __init__(self, server, port=1883, feport=9001):
         self.subscriber = MqttSubscriber(server, port)
         self.topic_funcs = {MQTT_REG_PATH : self.register, MQTT_REFRESH: self.refresh}
         self.registrations = []
-        self.monitor = CrossCameraMonitor()
+        self.frontend = MqttWebsocketClient(server, feport);
+        self.monitor = CrossCameraMonitor(self.frontend)
+        self.detHistoryTimeout = 10 # 10 seconds
+        threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, []).start()
 
     def register(self, client, userdata, msg):
         parts = msg.payload.decode().split(',')
@@ -193,6 +224,24 @@ class CentralServer:
                 self.topic_funcs[parts[1]] = reg.onEvent
                 self.monitor.addRegistration(parts[0])
 
+
+    def sendDetectionHistory(self):
+        results = []
+        for idf, tracks in self.monitor.getActiveDetections().items():
+            if not len(tracks) > 0:
+                continue
+            # Pick latest device only
+            det = tracks[-1]
+            time = int(det[2] * 1000) # Conver to ms since epoch
+            tr = ''
+            if len(det[1]) > 0:
+                tr = getDirections([det[1][-1]])[0]
+            results.append(DetectionHistory(idf, det[0], tr, time)._asdict())
+
+        self.frontend.message(MQTT_FRONTEND_DET_HISTORY, json.dumps(results))
+        threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, []).start()
+
+
     def refresh(self, client, userdata, msg):
         print()
         print('-----------------')
@@ -202,7 +251,7 @@ class CentralServer:
             print('Total {} active tracks found for device: {}'.format(len(tracks), reg))
             for t,v in tracks.items():
                 # print('Found Total entities with class id {}: {}'.format(t, len(v)))
-                print('Movements of {}: {}'.format(t, getDirections(v)))
+                print('Movements of {}: {}'.format(t, getDirections(v[0])))
 
         print()
         print('History of tracks:')
