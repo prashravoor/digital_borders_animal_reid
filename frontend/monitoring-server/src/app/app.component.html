@@ -326,7 +326,7 @@
           <div mat-card-avatar class="example-header-image"></div>
           <mat-card-title>{{device.name}}</mat-card-title>
         </mat-card-header>
-        <img style="width: 30%; height: 30%" mat-card-image [src]="device.detectionImg" alt="Getting detection image failed" *ngIf="device.detectionImg">
+        <img mat-card-image [src]="device.detectionImg" alt="Getting detection image failed" *ngIf="device.detectionImg">
         <mat-card-content>
           <p>Active Detections: {{device.activeDetections}}</p>
         </mat-card-content>
@@ -341,12 +341,12 @@
       <div>
         <h3 matLine>Identity: {{detection.name}}</h3>
         <h3 matLine>Device Last Spotted: {{detection.lastSeen}}</h3>
-      <h3 matLine>Last known travel direction: {{detection.travelDirection}}</h3>
-        <p matLine>Time last spotted: {{detection.lastSeenTime | date}}</p>
-      <mat-divider></mat-divider>
+        <h3 matLine>Last known travel direction: {{detection.travelDirection}}</h3>
+        <p matLine>Time last spotted: {{detection.lastSeenTime | date : "medium"}}</p>
+        <mat-divider></mat-divider>
       </div>
-   </mat-grid-tile>
-   </mat-grid-list>
+    </mat-grid-tile>
+  </mat-grid-list>
 </div>
 
 <!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->

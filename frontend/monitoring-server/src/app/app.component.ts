@@ -1,5 +1,7 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, SecurityContext } from '@angular/core';
 import { Observable, Subscription } from 'rxjs';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+
 
 import {
   IMqttMessage,
@@ -9,8 +11,9 @@ import {
 export interface RegisteredDevice {
   name: string;
   activeDetections: number;
-  detectionImg?: string;
+  detectionImg?: SafeResourceUrl;
   backgroundColor: string;
+  deterState?: string;
 }
 
 export interface DetectionHistory {
@@ -27,91 +30,102 @@ export interface DetectionHistory {
 })
 export class AppComponent implements OnInit, OnDestroy {
   private subscription: Subscription;
+  private detSubscription: Subscription;
+  REGISTRATION: string = 'frontend/registration';
+  DETECTION_HISTORY: string = 'frontend/detectionHistory';
+  REFRESH = 'refresh';
 
   title = 'monitoring-server';
   devices: RegisteredDevice[] = [
-    {
-      name: 'Raspberry_Pi_1',
-      activeDetections: 0,
-      backgroundColor: 'white', 
-    },
-    {
-      name: 'Raspberry_Pi_2',
-      activeDetections: 0, 
-      backgroundColor: 'white', 
-    },
-    {
-      name: 'Raspberry_Pi_3',
-      activeDetections: 0, 
-      backgroundColor: 'white', 
-    }
   ];
 
   detectionHistory: DetectionHistory[] = [
-    {
-      name: 'Tiger_0',
-      lastSeen: 'Raspberry_Pi_2',
-      travelDirection: 'Left, Down, and inwards',
-      lastSeenTime: new Date('2/17/20'),
-    },
-    {
-      name: 'Tiger_2',
-      lastSeen: 'Raspberry_Pi_3',
-      travelDirection: 'Left, Still, and Still',
-      lastSeenTime: new Date('2/17/20'),
-    },  
   ]; 
 
   regChannels = new Map<string, Subscription>();
 
+  constructor(private _mqttService: MqttService, private sanitizer: DomSanitizer) {
+    this.subscription = this._mqttService.observe(this.REGISTRATION).subscribe(this.addDevice.bind(this));
+    this.detSubscription = this._mqttService.observe(this.DETECTION_HISTORY).subscribe(this.setDetectionHistory.bind(this));
+  }
+
+
   addDevice(message: IMqttMessage): void {
     let msg = message.payload.toString();
-    this.devices.push( { name: msg, activeDetections: 0, backgroundColor: 'white' });
 
     // Add a subscription for device
     if (this.regChannels.has(msg)) {
       console.log('Device ' + msg + ' already registered!');
     } else {
-      console.log('Subscribing to ' + msg);
-      this.regChannels.set(msg, this._mqttService.observe(msg).subscribe(this.detectionReceived.bind(this)));
+      this.devices.push({ name: msg, activeDetections: 0, backgroundColor: 'white' });
+      let dataChannel = 'frontend/' + msg;
+      console.log('Subscribing to ' + dataChannel);
+      this.regChannels.set(msg, this._mqttService.observe(dataChannel).subscribe(this.detectionReceived.bind(this)));
+      let imageChannel = 'frontend/' + msg + '/image';
+      console.log('Subscribing to ' + imageChannel);
+      this.regChannels.set(msg, this._mqttService.observe(imageChannel).subscribe(this.detectionImageReceived.bind(this)));
     }
   }
 
   detectionReceived(message: IMqttMessage): void {
     let channel = message.topic.toString();
     let msg = message.payload.toString();
-    console.log('Detection received on ' + channel + ', : ' + msg);
+    try {
+      let jsMsg = JSON.parse(msg);
+      let devName: string = channel.split('/')[1];
+      for (let device of this.devices) {
+        if (device.name === devName) {
+          device.activeDetections = jsMsg.activeDetections;
+          if (jsMsg.deterState != null) {
+            if (jsMsg.deterState == 'alert') {
+              device.backgroundColor = 'yellow';
+            } else if (jsMsg.deterState == 'success') {
+              device.backgroundColor = 'green';
+            } else if (jsMsg.deterState == 'failed') {
+              device.backgroundColor = 'red';
+            }
+          } else {
+            device.backgroundColor = "white";
+          }
+        }
+      }
+    } catch(e) {
+      console.log('Invalid json received, ignoring...');
+    }
+     
   }
 
-  constructor(private _mqttService: MqttService) {
-    this.subscription = this._mqttService.observe('registration').subscribe(this.addDevice.bind(this));
-    console.log('Subscribed');
+  detectionImageReceived(message: IMqttMessage): void {
+    let channel = message.topic.toString();
+    let devName = channel.split('/')[1];
+    console.log('Received image...');
+    for (let device of this.devices) {
+      if (device.name === devName) {
+        console.log('Updating image for device ' + devName);
+        let url = 'data:image/jpg;base64,' + message.payload.toString(); 
+        device.detectionImg = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+      }
+    }
   }
 
-  setImages(): void {
-      this.devices.forEach((device) => { 
-          device.detectionImg = "https://material.angular.io/assets/img/examples/shiba2.jpg";
-      });
+  setDetectionHistory(message: IMqttMessage): void {
+    console.log(JSON.parse(message.payload.toString()));
+    this.detectionHistory = JSON.parse(message.payload.toString());
+  }
+
+  callRefresh(): void {
+    this._mqttService.unsafePublish(this.REFRESH, '');
   }
 
   ngOnInit() :void {
-      var tmp = this;
-      setTimeout(function() {
-          tmp.devices.forEach((device) => { 
-              device.detectionImg = "https://material.angular.io/assets/img/examples/shiba2.jpg";
-          });
-      }, 10000);
-
-      setTimeout(function () {
-          tmp.devices.push({ name: 'Raspberry_Pi_4', activeDetections: 0, backgroundColor: 'white',});
-          tmp.devices[0].backgroundColor = 'red';
-      }, 15000);
+    setTimeout(this.callRefresh.bind(this), 500); // Call after 1s
   }
 
   ngOnDestroy(): void {
     this.regChannels.forEach((value, key) => {
       value.unsubscribe();
     });
+    this.detSubscription.unsubscribe();
     this.subscription.unsubscribe();
   }
 

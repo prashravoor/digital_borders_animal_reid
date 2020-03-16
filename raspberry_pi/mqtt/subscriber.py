@@ -29,6 +29,7 @@ unknownCounter = 0
 inMemoryPerClassDb = defaultdict(list)
 
 def associateIdentities(detections, devName):
+    global unknownCounter
     if not isinstance(detections, Iterable):
         return []
 
@@ -81,7 +82,7 @@ class DeviceMonitor:
 
     def onEvent(self, client, userdata, msg):
         #print('Got message for device: {}: {}'.format(self.name, msg.payload.decode()))
-        if msg.topic.decode().split('/')[-1] == 'image':
+        if msg.topic.split('/')[-1] == 'image':
             self.imagePublisher.publishImage(msg.payload)
             return
 
@@ -180,6 +181,7 @@ class CrossCameraMonitor:
                     self.timerSet[idf] = True
                 # Start timer in case there were no detections
                     timer = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf])
+                    timer.setDaemon(True)
                     timer.start()
                     self.staticMap[idf] = False
             elif track.zdir == 'o':
@@ -216,7 +218,9 @@ class CrossCameraMonitor:
             print('Watching animal {} for some more time...'.format(idf))
             print()
             self.staticMap[idf] = False
-            threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf]).start()
+            th = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf])
+            th.setDaemon(True)
+            th.start()
             self.timerSet[idf] = True
             self.sendFeDetectionMessage(name, 1, 'alert')
         else:
@@ -236,6 +240,9 @@ class CrossCameraMonitor:
                 results[k].append((name, v[0], v[1]))
 
         return results
+
+    def getRegisteredDevices(self):
+        return list(self.registered.keys())
    
 class CentralServer:
     def __init__(self, server, port=1883, feport=9001):
@@ -245,7 +252,11 @@ class CentralServer:
         self.frontend = MqttWebsocketClient(server, feport);
         self.monitor = CrossCameraMonitor(self.frontend)
         self.detHistoryTimeout = 10 # 10 seconds
-        threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, []).start()
+        th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
+        th.setDaemon(True)
+        th.start()
+        self.server = server
+        self.fePort = feport
 
     def register(self, client, userdata, msg):
         parts = msg.payload.decode().split(',')
@@ -258,12 +269,13 @@ class CentralServer:
             else:
                 client.subscribe(parts[1])
                 client.subscribe('{}/image'.format(parts[1]))
-                reg = DeviceMonitor(parts[0], self.monitor)
+                reg = DeviceMonitor(parts[0], self.monitor, ImageWsPublisher('{}/{}'.format(MQTT_FRONTEND_BASE, parts[1]), self.server, self.fePort))
                 self.registrations.append(reg)
                 self.topic_funcs[parts[1]] = reg.onEvent
+                self.topic_funcs['{}/image'.format(parts[1])] = reg.onEvent
                 self.monitor.addRegistration(parts[0])
 
-    def sendDetectionHistory(self):
+    def sendDetectionHistory(self, periodic=True):
         results = []
         for idf, tracks in self.monitor.getActiveDetections().items():
             if not len(tracks) > 0:
@@ -277,7 +289,10 @@ class CentralServer:
             results.append(DetectionHistory(idf, det[0], tr, time)._asdict())
 
         self.frontend.message(MQTT_FRONTEND_DET_HISTORY, json.dumps(results))
-        threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, []).start()
+        if periodic:
+            th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
+            th.setDaemon(True)
+            th.start()
 
 
     def refresh(self, client, userdata, msg):
@@ -298,6 +313,12 @@ class CentralServer:
 
         print('-----------------')
         print()
+
+        # Also write data to frontend
+        for k in self.monitor.getRegisteredDevices():
+            self.frontend.message(MQTT_FRONTEND_REG, k)
+
+        self.sendDetectionHistory(periodic=False)
 
     def on_message(self, client, userdata, msg):
         try:

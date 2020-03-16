@@ -18,7 +18,7 @@ class MqttWebsocketClient:
         self.port = port
 
     def message(self, channel, message):
-        publish.single(channel, str(message), hostname=self.server, port=self.port, transport='websockets')
+        publish.single(channel, message, hostname=self.server, port=self.port, transport='websockets')
 
 class TrackPublisher:
     def __init__(self, name, server):
@@ -56,9 +56,9 @@ class ImageWsPublisher:
         self.name = name
         self.client = MqttWebsocketClient(server, port)
 
-    def publishImage(self, imageBinData):
-        self.client.message('{}/image'.format(self.name), base64.b64encode(imageBinData))
-        
+    def publishImage(self, image):
+        self.client.message('{}/image'.format(self.name), base64.b64encode(image))
+
 class TimedImagePublisher:
     def __init__(self, client, timeout=10):
         self.timeout = 10
@@ -67,4 +67,6 @@ class TimedImagePublisher:
 
     def publishImage(self, imageBinData):
         if time.time() - self.lastSentTime > self.timeout:
+            print('Sending Image to channel {}...'.format(self.client.name))
             self.client.publishImage(imageBinData)
+            self.lastSentTime = time.time()
