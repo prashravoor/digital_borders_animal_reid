@@ -4,13 +4,17 @@ from object_tracker import Tracker, Tracklet, mergeTracklets, getDirections
 from collections import namedtuple, Iterable, defaultdict
 from utils import DetectionResult, BoundingBox
 from mqtt_subscriber import MqttSubscriber
-from mqtt_publisher import MqttWebsocketClient
+from mqtt_publisher import MqttWebsocketClient,ImageWsPublisher,TimedImagePublisher
 import threading
 import json
+from im_utils import iou
+import numpy as np
+import traceback
 
 TrackedSubject = namedtuple('TrackedSubject', 'tracker timestamp')
 DetectionInfo = namedtuple('DetectionInfo', 'name activeDetections deterState')
 DetectionHistory = namedtuple('DetectionHistory', 'name lastSeen travelDirection lastSeenTime')
+CrossCamDetection = namedtuple('CrossCamDetection', 'name lastSeen timestamp bbox')
 
 MQTT_SERVER = "localhost"
 MQTT_REG_PATH = "registration"
@@ -20,24 +24,98 @@ MQTT_FRONTEND_REG = '{}/registration'.format(MQTT_FRONTEND_BASE)
 MQTT_FRONTEND_DET_HISTORY = '{}/detectionHistory'.format(MQTT_FRONTEND_BASE)
 
 LABELS = {1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
+unknownCounter = 0
 
+inMemoryPerClassDb = defaultdict(list)
+
+def associateIdentities(detections, devName):
+    if not isinstance(detections, Iterable):
+        return []
+
+    identities = []
+    # For each identity, find closest match and return
+    for det in detections:
+        classid = int(det.classid)
+        if classid not in LABELS:
+            LABELS[classid] = 'Unknown{}'.format(unknownCounter)
+            unknownCounter += 1
+
+        detName = '{}_{}'.format(devName, LABELS[classid])
+        if not isinstance(det, DetectionResult):
+            print('Malformed entry {}, failing operation...'.format(det))
+            return []
+
+        currentDetections = inMemoryPerClassDb[detName]
+        if len(currentDetections) == 0:
+            inMemoryPerClassDb[detName].append(det)
+            # First detection, assign label
+            name = '{}_{}_{}'.format(devName, LABELS[classid], len(inMemoryPerClassDb[detName]))
+        else:
+            # More than one existing detection, find correct one
+            # Find greatest IOU overlap. If < 0.25, new identity. If > 75%, same identity
+            iou_overlaps = [iou(det.bounding_box, x.bounding_box) for x in currentDetections]
+            if max(iou_overlaps) < 0.25: # New id
+                inMemoryPerClassDb[detName].append(det)
+                name = '{}_{}_{}'.format(devName, LABELS[classid], len(inMemoryPerClassDb[detName]))
+            else:
+                index = np.argmax(iou_overlaps)
+                inMemoryPerClassDb[index] = det
+                name = '{}_{}_{}'.format(devName, LABELS[classid], index + 1)
+        identities.append(name)
+
+
+    return identities
+                
+
+class DeviceMonitor:
+    def __init__(self, name, centralMonitor, imagePublisher, timeout = 10):
+        self.name = name
+        self.active_tracks = dict() # Per class object tracker lists
+        self.timeout = timeout # seconds
+        self.centralMonitor = centralMonitor
+        self.monitor = SubjectMonitor(timeout)
+        self.imagePublisher = TimedImagePublisher(imagePublisher)
+
+    def __repr__(self):
+        return self.name
+
+    def onEvent(self, client, userdata, msg):
+        #print('Got message for device: {}: {}'.format(self.name, msg.payload.decode()))
+        if msg.topic.decode().split('/')[-1] == 'image':
+            self.imagePublisher.publishImage(msg.payload)
+            return
+
+        detections = eval(msg.payload.decode())
+
+        if not isinstance(detections, Iterable):
+            print('Invalid type provided in event, expected iterable, got: {}'.format(type(detections)))
+            return
+
+        identities = associateIdentities(detections, self.name)
+        if not len(identities) == len(detections):
+            print('Data malformed, id association failed')
+            return
+        
+        for det,id in zip(detections, identities):
+            self.addDetection(det, id, len(detections))
+
+    def addDetection(self, detection, idf, total):
+        self.monitor.addDetection(detection, idf)
+        self.centralMonitor.addDetection(self.name, detection, idf, total)
+
+    def getActiveTracks(self):
+        return self.monitor.getActiveDetections()
+ 
 class SubjectMonitor:
     def __init__(self, timeout=3000):
         self.detections = dict()
         self.timeout = timeout
 
-    def _getIdentifier(self, classid):
-        # Right now, use class id for mapping tracklets. Replace wth actual identification code here
-        if int(classid) not in LABELS:
-            LABELS[int(classid)] = 'Unknown'
-
-        name = '{}_{}'.format(LABELS[int(classid)], 0)
-        return name
-
-    def addDetection(self, detection, idf=None):
+    def addDetection(self, detection, idf):
         curtime = time.time()
         if idf is None:
-            idf = self._getIdentifier(detection.classid)
+            print('Received invalid idf')
+            return
 
         if not idf in self.detections:
             print('Starting new track for id: {}'.format(idf))
@@ -80,13 +158,6 @@ class CrossCameraMonitor:
         data = DetectionInfo(device, numDetections, deter)
         self.feClient.message(channel, json.dumps(data._asdict()))
 
-    def _getIdentifier(self, detection):
-        # Right now, use class id for mapping tracklets. Replace wth actual identification code here
-        if int(detection.classid) not in LABELS:
-            LABELS[int(detection.classid)] = 'Unknown'
-        name = '{}_{}'.format(LABELS[int(detection.classid)], 0)
-        return name
-
     def addRegistration(self, name):
         if name in self.registered:
             print('{} already registered, ignoring...')
@@ -95,8 +166,7 @@ class CrossCameraMonitor:
             # Send message to frontend
             self.feClient.message(MQTT_FRONTEND_REG, name)
 
-    def addDetection(self, name, detection, numDetections):
-        idf = self._getIdentifier(detection)
+    def addDetection(self, name, detection, idf, numDetections):
         if name in self.registered:
             deterState = None 
             self.registered[name].addDetection(detection, idf)
@@ -114,7 +184,7 @@ class CrossCameraMonitor:
                     self.staticMap[idf] = False
             elif track.zdir == 'o':
                 self.inCounter[idf] = 0
-                if wasAlerted[idf]:
+                if self.wasAlerted[idf]:
                     deterState = 'success'
                 self.staticMap[idf] = False
                 self.wasAlerted[idf] = False
@@ -166,39 +236,7 @@ class CrossCameraMonitor:
                 results[k].append((name, v[0], v[1]))
 
         return results
-
-class DeviceMonitor:
-    def __init__(self, name, centralMonitor, timeout = 10):
-        self.name = name
-        self.active_tracks = dict() # Per class object tracker lists
-        self.timeout = timeout # seconds
-        self.centralMonitor = centralMonitor
-        self.monitor = SubjectMonitor(timeout)
-
-    def __repr__(self):
-        return self.name
-
-    def onEvent(self, client, userdata, msg):
-        #print('Got message for device: {}: {}'.format(self.name, msg.payload.decode()))
-        detections = eval(msg.payload.decode())
-
-        if not isinstance(detections, Iterable):
-            print('Invalid type provided in event, expected iterable, got: {}'.format(type(detections)))
-            return
-
-        for det in detections:
-            if not isinstance(det, DetectionResult):
-                print('Invalid object {}, expected type {}'.format(type(det), DetectionResult))
-            else:
-                self.addDetection(det, len(detections))
-
-    def addDetection(self, detection, total):
-        self.monitor.addDetection(detection)
-        self.centralMonitor.addDetection(self.name, detection, total)
-
-    def getActiveTracks(self):
-        return self.monitor.getActiveDetections()
-    
+   
 class CentralServer:
     def __init__(self, server, port=1883, feport=9001):
         self.subscriber = MqttSubscriber(server, port)
@@ -219,11 +257,11 @@ class CentralServer:
                 print('Warning: Device already registered...')
             else:
                 client.subscribe(parts[1])
+                client.subscribe('{}/image'.format(parts[1]))
                 reg = DeviceMonitor(parts[0], self.monitor)
                 self.registrations.append(reg)
                 self.topic_funcs[parts[1]] = reg.onEvent
                 self.monitor.addRegistration(parts[0])
-
 
     def sendDetectionHistory(self):
         results = []
@@ -256,7 +294,7 @@ class CentralServer:
         print()
         print('History of tracks:')
         for idf,tracks in self.monitor.getActiveDetections().items():
-            print('Identity: {}, Movement History: {}'.format(idf, tracks))
+            print('Identity: {}, Movement History: {}'.format(idf, [(x[0], getDirections(x[1]), x[2]) for x in tracks]))
 
         print('-----------------')
         print()
@@ -269,6 +307,7 @@ class CentralServer:
                 print('Not subscribed to topic {}, ignoring...'.format(msg.topic))
         except BaseException as e:
             print('Failed..: {}'.format(e))
+            print(traceback.print_exc())
 
     def onConnect(self, client, userdata, flags, rc):
         print("Connected with result code "+str(rc))
@@ -277,15 +316,6 @@ class CentralServer:
 
     def run(self):
         self.subscriber.run(self.onConnect, self.on_message)        
-        '''
-        client = mqtt.Client()
-        client.on_connect = self.onConnect
-        #client.on_message = self.onRegistration
-        client.on_message = self.on_message
-
-        client.connect(self.server, self.port, 60)
-        client.loop_forever()
-        '''
 
 if __name__ == '__main__':
     server = CentralServer(MQTT_SERVER)
