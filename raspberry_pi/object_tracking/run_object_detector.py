@@ -3,7 +3,7 @@ import sys
 import picamera
 import time
 import picamera.array
-from mqtt_publisher import TrackPublisher
+from mqtt_publisher import TrackPublisher, ImagePublisher
 import cv2
 import threading
 
@@ -42,7 +42,9 @@ def drawBbOnImage(image, detections):
                 (0, 0, 0), 2) # Draw label text
 
 def sendImageAsync(client, image):
-    threading.Thread(target=client.publishImage, args=(image)).start()
+    th = threading.Thread(target=client.publishImage, args=[image])
+    th.setDaemon(True)
+    th.start()
 
 if __name__ == '__main__':
     args = sys.argv

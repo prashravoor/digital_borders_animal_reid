@@ -2,6 +2,7 @@ import paho.mqtt.publish as publish
 import cv2
 import base64
 import time
+import traceback
 
 class MqttClient:
     def __init__(self, channel, hostname):
@@ -9,7 +10,7 @@ class MqttClient:
         self.channel = channel
 
     def message(self, message):
-        publish.single(self.channel, str(message), hostname=self.server)
+        publish.single(self.channel, message, hostname=self.server)
 
 class MqttWebsocketClient:
     def __init__(self, hostname, port=9001):
@@ -34,7 +35,7 @@ class TrackPublisher:
         self.REFRESH.message('') 
 
     def publishDetection(self, detection):
-        self.client.message(detection)
+        self.client.message(str(detection))
 
 
 class ImagePublisher:
@@ -44,7 +45,11 @@ class ImagePublisher:
         self.name = name
 
     def publishImage(self, image):
-        self.client.message(cv2.imencode('.jpg', image))
+        try:
+            _,data = cv2.imencode('.jpg', image)
+            self.client.message(data.tostring())
+        except:
+            traceback.print_exc()
 
 class ImageWsPublisher:
     def __init__(self, name, server, port=9001):
