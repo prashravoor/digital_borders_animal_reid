@@ -34,6 +34,7 @@ export class AppComponent implements OnInit, OnDestroy {
   REGISTRATION: string = 'frontend/registration';
   DETECTION_HISTORY: string = 'frontend/detectionHistory';
   REFRESH = 'refresh';
+  CLEAR = 'clear';
 
   title = 'monitoring-server';
   devices: RegisteredDevice[] = [
@@ -115,6 +116,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   callRefresh(): void {
     this._mqttService.unsafePublish(this.REFRESH, '');
+  }
+
+  clearDetections(): void {
+    this.detectionHistory = [];
+    this._mqttService.unsafePublish(this.CLEAR, '');
   }
 
   ngOnInit() :void {

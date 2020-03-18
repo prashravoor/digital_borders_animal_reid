@@ -334,7 +334,11 @@
     </mat-grid-tile>
   </mat-grid-list>
 </div>
-<div class="content" role="main">
+<div class="content" role="main" style="margin-top: auto">
+  <div style="float: right; width: 100%">
+    <button mat-raised-button color="primary" style="float: right" (click)="clearDetections()">Clear Detections</button>
+  </div>
+  <div style="width: 100%">
   <h3>Detected Entities Travel History</h3>
   <mat-grid-list cols="4" style="width: 100%" rowHeight="3:1"> 
     <mat-grid-tile *ngFor="let detection of detectionHistory" style="max-height: 100px">
@@ -347,6 +351,7 @@
       </div>
     </mat-grid-tile>
   </mat-grid-list>
+  </div>
 </div>
 
 <!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->

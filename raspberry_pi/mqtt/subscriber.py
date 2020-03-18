@@ -19,11 +19,12 @@ CrossCamDetection = namedtuple('CrossCamDetection', 'name lastSeen timestamp bbo
 MQTT_SERVER = "localhost"
 MQTT_REG_PATH = "registration"
 MQTT_REFRESH = 'refresh'
+MQTT_CLEAR = 'clear'
 MQTT_FRONTEND_BASE = 'frontend'
 MQTT_FRONTEND_REG = '{}/registration'.format(MQTT_FRONTEND_BASE)
 MQTT_FRONTEND_DET_HISTORY = '{}/detectionHistory'.format(MQTT_FRONTEND_BASE)
 
-LABELS = {1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
+LABELS = {0: 'Human', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
 unknownCounter = 0
 
 inMemoryPerClassDb = defaultdict(list)
@@ -142,6 +143,9 @@ class SubjectMonitor:
 
         return {k:(v.tracker.getTracklets(), v.timestamp) for k,v in self.detections.items()} 
 
+    def clearDetections(self):
+        self.detections = dict()
+
 class CrossCameraMonitor:
     def __init__(self, feClient, timeout=3000):
         self.registered = dict()
@@ -243,11 +247,16 @@ class CrossCameraMonitor:
 
     def getRegisteredDevices(self):
         return list(self.registered.keys())
+
+
+    def clearDetections(self):
+        for _,reg in self.registered.items():
+            reg.clearDetections()
    
 class CentralServer:
     def __init__(self, server, port=1883, feport=9001):
         self.subscriber = MqttSubscriber(server, port)
-        self.topic_funcs = {MQTT_REG_PATH : self.register, MQTT_REFRESH: self.refresh}
+        self.topic_funcs = {MQTT_REG_PATH : self.register, MQTT_REFRESH: self.refresh, MQTT_CLEAR: self.clearDetections}
         self.registrations = []
         self.frontend = MqttWebsocketClient(server, feport);
         self.monitor = CrossCameraMonitor(self.frontend)
@@ -320,6 +329,9 @@ class CentralServer:
 
         self.sendDetectionHistory(periodic=False)
 
+    def clearDetections(self, client, userdata, msg):
+        self.monitor.clearDetections()
+
     def on_message(self, client, userdata, msg):
         try:
             if msg.topic in self.topic_funcs:
@@ -334,6 +346,7 @@ class CentralServer:
         print("Connected with result code "+str(rc))
         client.subscribe(MQTT_REG_PATH)
         client.subscribe(MQTT_REFRESH)
+        client.subscribe(MQTT_CLEAR)
 
     def run(self):
         self.subscriber.run(self.onConnect, self.on_message)        

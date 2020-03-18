@@ -5,6 +5,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
 import { MatGridListModule } from '@angular/material/grid-list';
+import {MatButtonModule} from '@angular/material/button';
 
 import {
   IMqttMessage,
@@ -35,6 +36,7 @@ export const MQTT_SERVICE_OPTIONS: IMqttServiceOptions = {
     MatCardModule,
     MatGridListModule,
     MqttModule.forRoot(MQTT_SERVICE_OPTIONS),
+    MatButtonModule,
   ],
   providers: [],
   bootstrap: [AppComponent]
