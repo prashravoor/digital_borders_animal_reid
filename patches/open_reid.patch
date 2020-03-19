@@ -1,0 +1,743 @@
+diff --git a/examples/softmax_loss.py b/examples/softmax_loss.py
+index a28a640..4659484 100644
+--- a/examples/softmax_loss.py
++++ b/examples/softmax_loss.py
+@@ -159,6 +159,11 @@ def main(args):
+ 
+         print('\n * Finished epoch {:3d}  top1: {:5.1%}  best: {:5.1%}{}\n'.
+               format(epoch, top1, best_top1, ' *' if is_best else ''))
++        
++        dataset, num_classes, train_loader, val_loader, test_loader = \
++            get_data(args.dataset, np.random.randint(0,10), args.data_dir, args.height,
++                 args.width, args.batch_size, args.workers,
++                 args.combine_trainval)              
+ 
+     # Final test
+     print('Test with best model:')
+diff --git a/examples/triplet_loss.py b/examples/triplet_loss.py
+index c6294a2..4bb2e55 100644
+--- a/examples/triplet_loss.py
++++ b/examples/triplet_loss.py
+@@ -38,6 +38,7 @@ def get_data(name, split_id, data_dir, height, width, batch_size, num_instances,
+     train_transformer = T.Compose([
+         T.RandomSizedRectCrop(height, width),
+         T.RandomHorizontalFlip(),
++        T.RectScale(height, width),
+         T.ToTensor(),
+         normalizer,
+     ])
+@@ -99,6 +100,7 @@ def main(args):
+ 
+     # Load from checkpoint
+     start_epoch = best_top1 = 0
++    best_top1 = -1
+     if args.resume:
+         checkpoint = load_checkpoint(args.resume)
+         model.load_state_dict(checkpoint['state_dict'])
+@@ -111,16 +113,6 @@ def main(args):
+     # Distance metric
+     metric = DistanceMetric(algorithm=args.dist_metric)
+ 
+-    # Evaluator
+-    evaluator = Evaluator(model)
+-    if args.evaluate:
+-        metric.train(model, train_loader)
+-        print("Validation:")
+-        evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
+-        print("Test:")
+-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+-        return
+-
+     # Criterion
+     criterion = TripletLoss(margin=args.margin).cuda()
+ 
+@@ -131,6 +123,20 @@ def main(args):
+     # Trainer
+     trainer = Trainer(model, criterion)
+ 
++    # Evaluator
++    evaluator = Evaluator(model, criterion)
++    if args.evaluate:
++        metric.train(model, train_loader)
++        print("Validation:")
++        prec, loss = evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
++        #evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
++        print('Average loss: {:.4f}, Average Precision: {:.4f}'.format(loss, prec))
++        print("Test:")
++        prec, loss = evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
++        #evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
++        print('Average loss: {:.4f}, Average Precision: {:.4f}'.format(loss, prec))
++        return
++
+     # Schedule learning rate
+     def adjust_lr(epoch):
+         lr = args.lr if epoch <= 100 else \
+@@ -141,10 +147,11 @@ def main(args):
+     # Start training
+     for epoch in range(start_epoch, args.epochs):
+         adjust_lr(epoch)
+-        trainer.train(epoch, train_loader, optimizer)
++        prec = trainer.train(epoch, train_loader, optimizer)
+         if epoch < args.start_save:
+             continue
+-        top1 = evaluator.evaluate(val_loader, dataset.val, dataset.val)
++        top1, loss = evaluator.evaluate(val_loader, dataset.val, dataset.val)
++        print('Average loss: {:.4f}, Average Precision: {:.4f}'.format(loss, top1))
+ 
+         is_best = top1 > best_top1
+         best_top1 = max(top1, best_top1)
+@@ -156,13 +163,19 @@ def main(args):
+ 
+         print('\n * Finished epoch {:3d}  top1: {:5.1%}  best: {:5.1%}{}\n'.
+               format(epoch, top1, best_top1, ' *' if is_best else ''))
++        
++        #dataset, num_classes, train_loader, val_loader, test_loader = \
++        #get_data(args.dataset, np.random.randint(0,10), args.data_dir, args.height,
++        #         args.width, args.batch_size, args.num_instances, args.workers,
++        #         args.combine_trainval)
+ 
+     # Final test
+     print('Test with best model:')
+     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+     model.module.load_state_dict(checkpoint['state_dict'])
+     metric.train(model, train_loader)
+-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
++    prec, loss = evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
++    print('Average loss: {:4f}, Average Precision: {:4f}'.format(loss, prec))
+ 
+ 
+ if __name__ == '__main__':
+diff --git a/reid/datasets/__init__.py b/reid/datasets/__init__.py
+index 32a79b6..b1ee77c 100644
+--- a/reid/datasets/__init__.py
++++ b/reid/datasets/__init__.py
+@@ -6,6 +6,9 @@ from .cuhk03 import CUHK03
+ from .dukemtmc import DukeMTMC
+ from .market1501 import Market1501
+ from .viper import VIPeR
++from .amur import Amur
++from .elp import Elp
++from .jaguar import Jaguar
+ 
+ 
+ __factory = {
+@@ -14,6 +17,9 @@ __factory = {
+     'cuhk03': CUHK03,
+     'market1501': Market1501,
+     'dukemtmc': DukeMTMC,
++    'amur': Amur,
++    'elp': Elp,
++    'jaguar' : Jaguar
+ }
+ 
+ 
+diff --git a/reid/datasets/amur.py b/reid/datasets/amur.py
+index e69de29..8da267b 100644
+--- a/reid/datasets/amur.py
++++ b/reid/datasets/amur.py
+@@ -0,0 +1,90 @@
++from __future__ import print_function, absolute_import
++import os.path as osp
++
++import numpy as np
++
++from ..utils.data import Dataset
++from ..utils.osutils import mkdir_if_missing
++from ..utils.serialization import write_json
++
++
++class Amur(Dataset):
++
++    def __init__(self, root, split_id=0, num_val=20, download=True):
++        super(Amur, self).__init__(root, split_id=split_id)
++
++        if download:
++            self.download()
++
++        if not self._check_integrity():
++            raise RuntimeError("Dataset not found or corrupted. " +
++                               "You can use download=True to download it.")
++
++        self.load(num_val)
++
++    def download(self):
++        if self._check_integrity():
++            print("Files already downloaded and verified")
++            return
++
++        import hashlib
++        import shutil
++        from glob import glob
++        from zipfile import ZipFile
++
++        raw_dir = osp.join(self.root, 'raw')
++        if not osp.exists(raw_dir):
++            print('Place all required files in a folder called "raw"')
++            raise RuntimeError('Missing Dataset')
++        #mkdir_if_missing(raw_dir)
++
++        # Format
++        images_dir = osp.join(self.root, 'images')
++        mkdir_if_missing(images_dir)
++
++        with open(osp.join(raw_dir, 'class_mapping.txt')) as f:
++            file_map = {x.split()[0].strip() : x.split()[1].strip() for x in f.readlines()}
++
++        rev_map = dict()
++        cam = 0
++        for k,v in file_map.items():
++            if not v in rev_map:
++                rev_map[v] = []
++            rev_map[v].append(k)
++
++        # Filter all identities having less than 3 samples
++        #rev_map = {k:v for k,v in rev_map.items() if len(v) > 2}
++        num_identities = len(rev_map)
++        num_cameras = 1
++        
++        identities = [[[] for _ in range(num_cameras)] for _ in range(num_identities)]
++
++        files = sorted(glob(osp.join(raw_dir, '*.jpg')))
++        for fpath in files:
++            fname = osp.basename(fpath)
++            pid, cam = int(file_map[fname]) + 1, 1
++            assert 1 <= pid <= num_identities
++            assert 1 <= cam <= num_cameras
++            pid, cam = pid - 1, (cam - 1) // 2
++            fname = ('{:08d}_{:02d}_{:04d}.png'
++                     .format(pid, cam, len(identities[pid][cam])))
++            identities[pid][cam].append(fname)
++            shutil.copy(fpath, osp.join(images_dir, fname))
++
++        # Save meta information into a json file
++        meta = {'name': 'amur', 'shot': 'multiple', 'num_cameras': 1,
++                'identities': identities}
++        write_json(meta, osp.join(self.root, 'meta.json'))
++
++        # Randomly create ten training and test split
++        num = len(identities)
++        splits = []
++        for _ in range(10):
++            pids = np.random.permutation(num).tolist()
++            trainval_pids = sorted(pids[:num // 2])
++            test_pids = sorted(pids[num // 2:])
++            split = {'trainval': trainval_pids,
++                     'query': test_pids,
++                     'gallery': test_pids}
++            splits.append(split)
++        write_json(splits, osp.join(self.root, 'splits.json'))
+diff --git a/reid/datasets/elp.py b/reid/datasets/elp.py
+index e69de29..117802a 100644
+--- a/reid/datasets/elp.py
++++ b/reid/datasets/elp.py
+@@ -0,0 +1,99 @@
++from __future__ import print_function, absolute_import
++import os.path as osp
++
++import numpy as np
++
++from ..utils.data import Dataset
++from ..utils.osutils import mkdir_if_missing
++from ..utils.serialization import write_json
++
++
++class Elp(Dataset):
++
++    def __init__(self, root, split_id=0, num_val=0.3, download=True):
++        super(Elp, self).__init__(root, split_id=split_id)
++
++        if download:
++            self.download()
++
++        if not self._check_integrity():
++            raise RuntimeError("Dataset not found or corrupted. " +
++                               "You can use download=True to download it.")
++
++        self.load(num_val)
++
++    def download(self):
++        if self._check_integrity():
++            print("Files already downloaded and verified")
++            return
++
++        import hashlib
++        import shutil
++        from glob import glob
++        from zipfile import ZipFile
++
++        raw_dir = osp.join(self.root, 'raw')
++        if not osp.exists(raw_dir):
++            print('Place all required files in a folder called "raw"')
++            raise RuntimeError('Missing Dataset')
++        #mkdir_if_missing(raw_dir)
++
++        # Format
++        images_dir = osp.join(self.root, 'images')
++        mkdir_if_missing(images_dir)
++
++        with open(osp.join(raw_dir, 'class_mapping.txt')) as f:
++            file_map = {x.split()[0].strip() : x.split()[1].strip() for x in f.readlines()}
++
++        rev_map = dict()
++        cam = 0
++        for k,v in file_map.items():
++            if not v in rev_map:
++                rev_map[v] = []
++            rev_map[v].append(k)
++
++        # Filter all identities having less than 3 samples
++        #rev_map = {k:v for k,v in rev_map.items() if len(v) > 2}
++        num_identities = len(rev_map)
++        num_cameras = 1
++        
++        # Account for missing identities, relabel each one
++        counter = 0
++        id_map = dict()
++        for k in rev_map.keys():
++            id_map[k] = counter
++            counter += 1
++        
++        identities = [[[] for _ in range(num_cameras)] for _ in range(num_identities)]
++
++        files = sorted(glob(osp.join(raw_dir, '*.jpg')))
++        for fpath in files:
++            fname = osp.basename(fpath)
++            pid, cam = int(id_map[file_map[fname]]) + 1, 1
++            assert 1 <= pid <= num_identities
++            assert 1 <= cam <= num_cameras
++            pid, cam = pid - 1, (cam - 1) // 2
++            fname = ('{:08d}_{:02d}_{:04d}.jpg'
++                     .format(pid, cam, len(identities[pid][cam])))
++            identities[pid][cam].append(fname)
++            shutil.copy(fpath, osp.join(images_dir, fname))
++
++        # Save meta information into a json file
++        meta = {'name': 'elp', 'shot': 'multiple', 'num_cameras': 1,
++                'identities': identities}
++        write_json(meta, osp.join(self.root, 'meta.json'))
++
++        # Randomly create ten training and test split
++        num = len(identities)
++        splits = []
++        for _ in range(10):
++            pids = np.random.permutation(num).tolist()
++            #trainval_pids = sorted(pids[:num // 2])
++            #test_pids = sorted(pids[num // 2:])
++            trainval_pids = sorted(pids[num // 4:])
++            test_pids = sorted(pids[:num // 4])
++            split = {'trainval': trainval_pids,
++                     'query': test_pids,
++                     'gallery': test_pids}
++            splits.append(split)
++        write_json(splits, osp.join(self.root, 'splits.json'))
+diff --git a/reid/datasets/jaguar.py b/reid/datasets/jaguar.py
+index e69de29..9e36043 100644
+--- a/reid/datasets/jaguar.py
++++ b/reid/datasets/jaguar.py
+@@ -0,0 +1,108 @@
++from __future__ import print_function, absolute_import
++import os.path as osp
++
++import numpy as np
++
++from ..utils.data import Dataset
++from ..utils.osutils import mkdir_if_missing
++from ..utils.serialization import write_json
++
++
++class Jaguar(Dataset):
++
++    def __init__(self, root, split_id=0, num_val=0.3, download=True):
++        super(Jaguar, self).__init__(root, split_id=split_id)
++
++        if download:
++            self.download()
++
++        if not self._check_integrity():
++            raise RuntimeError("Dataset not found or corrupted. " +
++                               "You can use download=True to download it.")
++
++        self.load(num_val)
++
++    def download(self):
++        if self._check_integrity():
++            print("Files already downloaded and verified")
++            return
++
++        import hashlib
++        import shutil
++        from glob import glob
++        from zipfile import ZipFile
++
++        raw_dir = osp.join(self.root, 'raw')
++        if not osp.exists(raw_dir):
++            print('Place all required files in a folder called "raw"')
++            raise RuntimeError('Missing Dataset')
++        #mkdir_if_missing(raw_dir)
++
++        # Format
++        images_dir = osp.join(self.root, 'images')
++        mkdir_if_missing(images_dir)
++
++        with open(osp.join(raw_dir, 'class_mapping.txt')) as f:
++            file_map = {x.split()[0].strip() : x.split()[1].strip() for x in f.readlines()}
++
++        rev_map = dict()
++        cam = 0
++        for k,v in file_map.items():
++            if not v in rev_map:
++                rev_map[v] = []
++            rev_map[v].append(k)
++
++        # Filter all identities having less than 3 samples
++        #rev_map = {k:v for k,v in rev_map.items() if len(v) > 2}
++        
++        # Account for missing identities, relabel each one
++        counter = 0
++        id_map = dict()
++        for k in rev_map.keys():
++            id_map[k] = counter
++            counter += 1
++        
++        max_samples = 150
++        # Randomly choose max_samples samples for every identity 
++        new_map = []
++        for k,v in rev_map.items():
++            new_map.extend(np.random.choice(v, min(max_samples, len(v)), replace=False))
++
++        num_identities = len(rev_map)
++        num_cameras = 1
++        
++        identities = [[[] for _ in range(num_cameras)] for _ in range(num_identities)]
++
++        files = sorted(glob(osp.join(raw_dir, '*.jpg')))
++        for fpath in files:
++            fname = osp.basename(fpath)
++            if not fname in new_map:
++                continue
++            pid, cam = int(id_map[file_map[fname]]) + 1, 1
++            assert 1 <= pid <= num_identities
++            assert 1 <= cam <= num_cameras
++            pid, cam = pid - 1, (cam - 1) // 2
++            fname = ('{:08d}_{:02d}_{:04d}.jpg'
++                     .format(pid, cam, len(identities[pid][cam])))
++            identities[pid][cam].append(fname)
++            shutil.copy(fpath, osp.join(images_dir, fname))
++
++        # Save meta information into a json file
++        meta = {'name': 'jaguar', 'shot': 'multiple', 'num_cameras': 1,
++                'identities': identities}
++        write_json(meta, osp.join(self.root, 'meta.json'))
++
++        # Randomly create ten training and test split
++        num = len(identities)
++        splits = []
++        for _ in range(10):
++            pids = np.random.permutation(num).tolist()
++            #trainval_pids = sorted(pids[:num // 2])
++            #test_pids = sorted(pids[num // 2:])
++            test_pids = sorted(pids[: num // 4])
++            trainval_pids = sorted(pids[num // 4:])
++            split = {'trainval': trainval_pids,
++                     'query': test_pids,
++                     'gallery': test_pids}
++            splits.append(split)
++        write_json(splits, osp.join(self.root, 'splits.json'))
+diff --git a/reid/evaluation_metrics/ranking.py b/reid/evaluation_metrics/ranking.py
+index f85b1fc..575ed2f 100644
+--- a/reid/evaluation_metrics/ranking.py
++++ b/reid/evaluation_metrics/ranking.py
+@@ -44,8 +44,8 @@ def cmc(distmat, query_ids=None, gallery_ids=None,
+     num_valid_queries = 0
+     for i in range(m):
+         # Filter out the same id and same camera
+-        valid = ((gallery_ids[indices[i]] != query_ids[i]) |
+-                 (gallery_cams[indices[i]] != query_cams[i]))
++        #valid = ((gallery_ids[indices[i]] != query_ids[i]))
++        valid = np.ones(matches.shape[0]).astype(bool)
+         if separate_camera_set:
+             # Filter out samples from same camera
+             valid &= (gallery_cams[indices[i]] != query_cams[i])
+@@ -75,7 +75,9 @@ def cmc(distmat, query_ids=None, gallery_ids=None,
+                 ret[k - j] += delta
+         num_valid_queries += 1
+     if num_valid_queries == 0:
+-        raise RuntimeError("No valid query")
++        #raise RuntimeError("No valid query")
++        print('No valid query!')
++        return ret.cumsum()
+     return ret.cumsum() / num_valid_queries
+ 
+ 
+@@ -97,19 +99,27 @@ def mean_ap(distmat, query_ids=None, gallery_ids=None,
+     gallery_ids = np.asarray(gallery_ids)
+     query_cams = np.asarray(query_cams)
+     gallery_cams = np.asarray(gallery_cams)
++    #print('Query Ids: {}, Gallery Ids: {}, Query Cams: {}, Gallery Cams: {}'.format(query_ids, gallery_ids, query_cams, gallery_cams))
+     # Sort and find correct matches
+     indices = np.argsort(distmat, axis=1)
+     matches = (gallery_ids[indices] == query_ids[:, np.newaxis])
++    #print('Matches Shape: {}, Indices: {}, Distmat: {}, Query: {}, Gallery: {}'.format(matches.shape, indices.shape, distmat.shape, query_ids[:, np.newaxis].shape, gallery_ids[indices].shape))
+     # Compute AP for each query
+     aps = []
+     for i in range(m):
+-        # Filter out the same id and same camera
+-        valid = ((gallery_ids[indices[i]] != query_ids[i]) |
+-                 (gallery_cams[indices[i]] != query_cams[i]))
+-        y_true = matches[i, valid]
+-        y_score = -distmat[i][indices[i]][valid]
++        # Filter out the same id
++        #valid = ((gallery_ids[indices[i]] != query_ids[i]))
++        #y_true = matches[i, valid]
++        y_true = matches[i]
++        #y_score = -distmat[i][indices[i]][valid]
++        y_score = -distmat[i][indices[i]]
++        #print('i = {}, Gallery Ids: {}, Query Ids: {}, Valid: {}, Y-True: {}, Y-Score: {}'.format(i, gallery_ids.shape, query_ids[i].shape, valid.shape, matches[i, valid].shape, y_score.shape))
++        #print('i = {}, Gallery: {}, Query: {}, Matches[i]: {}, Matches[i,valid]: {}, y_true: {}'.format(i, indices[i], gallery_ids[indices[i]], query_ids[i], matches[i], matches[i, valid], y_true))
++        #print('i = {}, y_true = {}, y_score = {}'.format(i, matches[i, valid], y_score))
++        #if not np.any(y_true): continue
+         if not np.any(y_true): continue
+         aps.append(average_precision_score(y_true, y_score))
+     if len(aps) == 0:
+-        raise RuntimeError("No valid query")
++        #raise RuntimeError("No valid query")
++        aps = np.array([0.])
+     return np.mean(aps)
+diff --git a/reid/evaluators.py b/reid/evaluators.py
+index 5a3be2f..2b33924 100644
+--- a/reid/evaluators.py
++++ b/reid/evaluators.py
+@@ -7,6 +7,8 @@ import torch
+ from .evaluation_metrics import cmc, mean_ap
+ from .feature_extraction import extract_cnn_feature
+ from .utils.meters import AverageMeter
++from torch.autograd import Variable
++from .loss import OIMLoss, TripletLoss
+ 
+ 
+ def extract_features(model, data_loader, print_freq=1, metric=None):
+@@ -85,14 +87,14 @@ def evaluate_all(distmat, query=None, gallery=None,
+     # Compute all kinds of CMC scores
+     cmc_configs = {
+         'allshots': dict(separate_camera_set=False,
+-                         single_gallery_shot=False,
++                         single_gallery_shot=True,
+                          first_match_break=False),
+-        'cuhk03': dict(separate_camera_set=True,
++        'cuhk03': dict(separate_camera_set=False,
+                        single_gallery_shot=True,
+                        first_match_break=False),
+         'market1501': dict(separate_camera_set=False,
+-                           single_gallery_shot=False,
+-                           first_match_break=True)}
++                           single_gallery_shot=True,
++                           first_match_break=False)}
+     cmc_scores = {name: cmc(distmat, query_ids, gallery_ids,
+                             query_cams, gallery_cams, **params)
+                   for name, params in cmc_configs.items()}
+@@ -100,6 +102,8 @@ def evaluate_all(distmat, query=None, gallery=None,
+     print('CMC Scores{:>12}{:>12}{:>12}'
+           .format('allshots', 'cuhk03', 'market1501'))
+     for k in cmc_topk:
++        if k > len(cmc_scores['allshots']):
++            continue
+         print('  top-{:<4}{:12.1%}{:12.1%}{:12.1%}'
+               .format(k, cmc_scores['allshots'][k - 1],
+                       cmc_scores['cuhk03'][k - 1],
+@@ -110,11 +114,52 @@ def evaluate_all(distmat, query=None, gallery=None,
+ 
+ 
+ class Evaluator(object):
+-    def __init__(self, model):
++    def __init__(self, model, criterion):
+         super(Evaluator, self).__init__()
+         self.model = model
++        self.criterion = criterion
+ 
++    '''
+     def evaluate(self, data_loader, query, gallery, metric=None):
+         features, _ = extract_features(self.model, data_loader)
+         distmat = pairwise_distance(features, query, gallery, metric=metric)
+         return evaluate_all(distmat, query=query, gallery=gallery)
++    '''
++    def _parse_data(self, inputs):
++        imgs, _, pids, _ = inputs
++        inputs = [Variable(imgs)]
++        targets = Variable(pids.cuda())
++        return inputs, targets
++        
++    def _forward(self, inputs, targets):
++        outputs = self.model(*inputs)
++        if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
++            loss = self.criterion(outputs, targets)
++            prec, = accuracy(outputs.data, targets.data)
++            prec = prec[0]
++        elif isinstance(self.criterion, OIMLoss):
++            loss, outputs = self.criterion(outputs, targets)
++            prec, = accuracy(outputs.data, targets.data)
++            prec = prec[0]
++        elif isinstance(self.criterion, TripletLoss):
++            loss, prec = self.criterion(outputs, targets)
++        else:
++            raise ValueError("Unsupported loss:", self.criterion)
++        return loss, prec    
++        
++    def evaluate(self, data_loader, query, gallery, metric=None):
++        precisions = AverageMeter()
++        losses = AverageMeter()
++        
++        for i, inputs in enumerate(data_loader):
++            with torch.no_grad():
++                self.model.eval()
++                inputs, targets = self._parse_data(inputs)
++                if len(set(targets.cpu().numpy())) == 1:
++                    print('Found an input with all same targets, skipping...')
++                    continue
++                loss, prec1 = self._forward(inputs, targets)
++                losses.update(loss.data.item(), targets.size(0))
++                precisions.update(prec1, targets.size(0))
++            
++        return precisions.avg, losses.avg
+\ No newline at end of file
+diff --git a/reid/feature_extraction/cnn.py b/reid/feature_extraction/cnn.py
+index c5a567b..7804e48 100644
+--- a/reid/feature_extraction/cnn.py
++++ b/reid/feature_extraction/cnn.py
+@@ -2,26 +2,27 @@ from __future__ import absolute_import
+ from collections import OrderedDict
+ 
+ from torch.autograd import Variable
+-
++import torch
+ from ..utils import to_torch
+ 
+ 
+ def extract_cnn_feature(model, inputs, modules=None):
+-    model.eval()
+-    inputs = to_torch(inputs)
+-    inputs = Variable(inputs, volatile=True)
+-    if modules is None:
+-        outputs = model(inputs)
+-        outputs = outputs.data.cpu()
+-        return outputs
+-    # Register forward hook for each module
+-    outputs = OrderedDict()
+-    handles = []
+-    for m in modules:
+-        outputs[id(m)] = None
+-        def func(m, i, o): outputs[id(m)] = o.data.cpu()
+-        handles.append(m.register_forward_hook(func))
+-    model(inputs)
+-    for h in handles:
+-        h.remove()
+-    return list(outputs.values())
++    with torch.no_grad():
++        model.eval()
++        inputs = to_torch(inputs)
++        inputs = Variable(inputs)
++        if modules is None:
++            outputs = model(inputs)
++            outputs = outputs.data.cpu()
++            return outputs
++        # Register forward hook for each module
++        outputs = OrderedDict()
++        handles = []
++        for m in modules:
++            outputs[id(m)] = None
++            def func(m, i, o): outputs[id(m)] = o.data.cpu()
++            handles.append(m.register_forward_hook(func))
++        model(inputs)
++        for h in handles:
++            h.remove()
++        return list(outputs.values())
+diff --git a/reid/loss/triplet.py b/reid/loss/triplet.py
+index a019eee..14c2abe 100644
+--- a/reid/loss/triplet.py
++++ b/reid/loss/triplet.py
+@@ -3,6 +3,7 @@ from __future__ import absolute_import
+ import torch
+ from torch import nn
+ from torch.autograd import Variable
++import numpy as np
+ 
+ 
+ class TripletLoss(nn.Module):
+@@ -10,6 +11,7 @@ class TripletLoss(nn.Module):
+         super(TripletLoss, self).__init__()
+         self.margin = margin
+         self.ranking_loss = nn.MarginRankingLoss(margin=margin)
++        #self.ranking_loss = nn.TripletMarginLoss(margin=margin)
+ 
+     def forward(self, inputs, targets):
+         n = inputs.size(0)
+@@ -24,13 +26,14 @@ class TripletLoss(nn.Module):
+         for i in range(n):
+             dist_ap.append(dist[i][mask[i]].max())
+             dist_an.append(dist[i][mask[i] == 0].min())
+-        dist_ap = torch.cat(dist_ap)
+-        dist_an = torch.cat(dist_an)
++            
++        dist_ap = torch.stack(dist_ap)
++        dist_an = torch.stack(dist_an)
+         # Compute ranking hinge loss
+         y = dist_an.data.new()
+         y.resize_as_(dist_an.data)
+         y.fill_(1)
+         y = Variable(y)
+         loss = self.ranking_loss(dist_an, dist_ap, y)
+-        prec = (dist_an.data > dist_ap.data).sum() * 1. / y.size(0)
++        prec = ((dist_an.data - dist_ap.data) > self.margin).sum() * 1. / y.size(0)
+         return loss, prec
+diff --git a/reid/metric_learning/euclidean.py b/reid/metric_learning/euclidean.py
+index d33a57a..9390024 100644
+--- a/reid/metric_learning/euclidean.py
++++ b/reid/metric_learning/euclidean.py
+@@ -3,7 +3,6 @@ from __future__ import absolute_import
+ import numpy as np
+ from metric_learn.base_metric import BaseMetricLearner
+ 
+-
+ class Euclidean(BaseMetricLearner):
+     def __init__(self):
+         self.M_ = None
+@@ -19,3 +18,12 @@ class Euclidean(BaseMetricLearner):
+         if X is None:
+             return self.X_
+         return X
++        
++    def _get_dist(self, a, b):
++        return np.linarg.norm(a-b)
++        
++    def score_pairs(self, pairs):
++        return np.array([self._get_dist(x[0], x[1]) for x in pairs])
++    
++    def get_metric(self):
++        return self._get_dist
+diff --git a/reid/trainers.py b/reid/trainers.py
+index 8b2d651..9ffe759 100644
+--- a/reid/trainers.py
++++ b/reid/trainers.py
+@@ -30,7 +30,7 @@ class BaseTrainer(object):
+             inputs, targets = self._parse_data(inputs)
+             loss, prec1 = self._forward(inputs, targets)
+ 
+-            losses.update(loss.data[0], targets.size(0))
++            losses.update(loss.data.item(), targets.size(0))
+             precisions.update(prec1, targets.size(0))
+ 
+             optimizer.zero_grad()
+@@ -51,6 +51,7 @@ class BaseTrainer(object):
+                               data_time.val, data_time.avg,
+                               losses.val, losses.avg,
+                               precisions.val, precisions.avg))
++        return precisions.avg
+ 
+     def _parse_data(self, inputs):
+         raise NotImplementedError
+diff --git a/train.bat b/train.bat
+index e69de29..13b4ea4 100644
+--- a/train.bat
++++ b/train.bat
+@@ -0,0 +1 @@
++python examples\triplet_loss.py -d elp -j 2 -b 16 --data-dir amur_data --width 256 --height 256 --features 4096 --dropout 0.5 --margin 2.0 --epochs 100 --combine-trainval --lr 0.00001
+\ No newline at end of file

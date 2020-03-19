@@ -1,0 +1,535 @@
+diff --git a/configs/softmax_triplet_with_center.yml b/configs/softmax_triplet_with_center.yml
+index 1158b35..6f0a3e3 100644
+--- a/configs/softmax_triplet_with_center.yml
++++ b/configs/softmax_triplet_with_center.yml
+@@ -1,27 +1,28 @@
+ MODEL:
++  #PRETRAIN_CHOICE: 'self'
+   PRETRAIN_CHOICE: 'imagenet'
+-  PRETRAIN_PATH: '/home/haoluo/.torch/models/resnet50-19c8e357.pth'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet121-a639ec97.pth'
++  PRETRAIN_PATH: 'saves\\resnet50_model_40.pth'
+   METRIC_LOSS_TYPE: 'triplet_center'
+   IF_LABELSMOOTH: 'on'
+   IF_WITH_CENTER: 'yes'
+-
+-
+-
++  NAME: 'resnet50'
+ 
+ INPUT:
+-  SIZE_TRAIN: [256, 128]
+-  SIZE_TEST: [256, 128]
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
+   PROB: 0.5 # random horizontal flip
+   RE_PROB: 0.5 # random erasing
+   PADDING: 10
+ 
+ DATASETS:
+-  NAMES: ('market1501')
++  NAMES: ('elp')
+ 
+ DATALOADER:
+   SAMPLER: 'softmax_triplet'
+   NUM_INSTANCE: 4
+-  NUM_WORKERS: 8
++  NUM_WORKERS: 2
+ 
+ SOLVER:
+   OPTIMIZER_NAME: 'Adam'
+@@ -42,26 +43,27 @@ SOLVER:
+   BIAS_LR_FACTOR: 1
+   WEIGHT_DECAY: 0.0005
+   WEIGHT_DECAY_BIAS: 0.0005
+-  IMS_PER_BATCH: 64
++  IMS_PER_BATCH: 16
+ 
+   STEPS: [40, 70]
++  #STEPS: [30, 60]
+   GAMMA: 0.1
+ 
+   WARMUP_FACTOR: 0.01
+-  WARMUP_ITERS: 10
++  WARMUP_ITERS: 1
+   WARMUP_METHOD: 'linear'
+ 
+-  CHECKPOINT_PERIOD: 40
+-  LOG_PERIOD: 20
+-  EVAL_PERIOD: 40
++  CHECKPOINT_PERIOD: 20
++  LOG_PERIOD: 10
++  EVAL_PERIOD: 20
+ 
+ TEST:
+-  IMS_PER_BATCH: 128
++  IMS_PER_BATCH: 16
+   RE_RANKING: 'no'
+   WEIGHT: "path"
+   NECK_FEAT: 'after'
+   FEAT_NORM: 'yes'
+ 
+-OUTPUT_DIR: "/home/haoluo/log/gu/reid_baseline_review/Opensource_test/market1501/Experiment-all-tricks-tri_center-256x128-bs16x4-warmup10-erase0_5-labelsmooth_on-laststride1-bnneck_on-triplet_centerloss0_0005"
++OUTPUT_DIR: "elp_test"
+ 
+ 
+diff --git a/data/datasets/__init__.py b/data/datasets/__init__.py
+index fb8dc13..6c20a08 100644
+--- a/data/datasets/__init__.py
++++ b/data/datasets/__init__.py
+@@ -8,6 +8,9 @@ from .dukemtmcreid import DukeMTMCreID
+ from .market1501 import Market1501
+ from .msmt17 import MSMT17
+ from .veri import VeRi
++from .amur import Amur
++from .jaguar import Jaguar
++from .elp import Elp
+ from .dataset_loader import ImageDataset
+ 
+ __factory = {
+@@ -16,6 +19,9 @@ __factory = {
+     'dukemtmc': DukeMTMCreID,
+     'msmt17': MSMT17,
+     'veri': VeRi,
++    'amur': Amur,
++    'jaguar' : Jaguar,
++    'elp' : Elp
+ }
+ 
+ 
+diff --git a/data/datasets/amur.py b/data/datasets/amur.py
+index e69de29..bc2715a 100644
+--- a/data/datasets/amur.py
++++ b/data/datasets/amur.py
+@@ -0,0 +1,83 @@
++import glob
++import re
++
++import os.path as osp
++
++from .bases import BaseImageDataset
++
++
++class Amur(BaseImageDataset):
++    """
++       VeRi-776
++       Reference:
++       Liu, Xinchen, et al. "Large-scale vehicle re-identification in urban surveillance videos." ICME 2016.
++
++       URL:https://vehiclereid.github.io/VeRi/
++
++       Dataset statistics:
++       # identities: 776
++       # images: 37778 (train) + 1678 (query) + 11579 (gallery)
++       # cameras: 20
++       """
++
++    dataset_dir = 'amur'
++
++    def __init__(self, root='../', verbose=True, **kwargs):
++        super(Amur, self).__init__()
++        self.dataset_dir = osp.join(root, self.dataset_dir)
++        self.train_dir = osp.join(self.dataset_dir, 'image_train')
++        self.query_dir = osp.join(self.dataset_dir, 'image_query')
++        self.gallery_dir = osp.join(self.dataset_dir, 'image_gallery')
++
++        self._check_before_run()
++
++        train = self._process_dir(self.train_dir, relabel=True)
++        query = self._process_dir(self.query_dir, relabel=False)
++        gallery = self._process_dir(self.gallery_dir, relabel=False)
++
++        if verbose:
++            print("=> Amur Dataset loaded")
++            self.print_dataset_statistics(train, query, gallery)
++
++        self.train = train
++        self.query = query
++        self.gallery = gallery
++
++        self.num_train_pids, self.num_train_imgs, self.num_train_cams = self.get_imagedata_info(self.train)
++        self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
++        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
++
++    def _check_before_run(self):
++        """Check if all files are available before going deeper"""
++        if not osp.exists(self.dataset_dir):
++            raise RuntimeError("'{}' is not available".format(self.dataset_dir))
++        if not osp.exists(self.train_dir):
++            raise RuntimeError("'{}' is not available".format(self.train_dir))
++        if not osp.exists(self.query_dir):
++            raise RuntimeError("'{}' is not available".format(self.query_dir))
++        if not osp.exists(self.gallery_dir):
++            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
++
++    def _process_dir(self, dir_path, relabel=False):
++        img_paths = glob.glob(osp.join(dir_path, '*.png'))
++        pattern = re.compile(r'([-\d]+)_(\d+)_(\d+)')
++
++        pid_container = set()
++        for img_path in img_paths:
++            pid, _, _ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            pid_container.add(pid)
++        pid2label = {pid: label for label, pid in enumerate(pid_container)}
++
++        dataset = []
++        for img_path in img_paths:
++            pid, camid,_ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            assert 0 <= pid <= 776  # pid == 0 means background
++            assert 0 <= camid <= 20
++            #camid -= 1  # index starts from 0
++            if relabel: pid = pid2label[pid]
++            dataset.append((img_path, pid, camid))
++
++        return dataset
++
+diff --git a/data/datasets/elp.py b/data/datasets/elp.py
+index e69de29..af60824 100644
+--- a/data/datasets/elp.py
++++ b/data/datasets/elp.py
+@@ -0,0 +1,83 @@
++import glob
++import re
++
++import os.path as osp
++
++from .bases import BaseImageDataset
++
++
++class Elp(BaseImageDataset):
++    """
++       VeRi-776
++       Reference:
++       Liu, Xinchen, et al. "Large-scale vehicle re-identification in urban surveillance videos." ICME 2016.
++
++       URL:https://vehiclereid.github.io/VeRi/
++
++       Dataset statistics:
++       # identities: 776
++       # images: 37778 (train) + 1678 (query) + 11579 (gallery)
++       # cameras: 20
++       """
++
++    dataset_dir = 'elp'
++
++    def __init__(self, root='../', verbose=True, **kwargs):
++        super(Elp, self).__init__()
++        self.dataset_dir = osp.join(root, self.dataset_dir)
++        self.train_dir = osp.join(self.dataset_dir, 'image_train')
++        self.query_dir = osp.join(self.dataset_dir, 'image_query')
++        self.gallery_dir = osp.join(self.dataset_dir, 'image_gallery')
++
++        self._check_before_run()
++
++        train = self._process_dir(self.train_dir, relabel=True)
++        query = self._process_dir(self.query_dir, relabel=False)
++        gallery = self._process_dir(self.gallery_dir, relabel=False)
++
++        if verbose:
++            print("=> Elephants Dataset loaded")
++            self.print_dataset_statistics(train, query, gallery)
++
++        self.train = train
++        self.query = query
++        self.gallery = gallery
++
++        self.num_train_pids, self.num_train_imgs, self.num_train_cams = self.get_imagedata_info(self.train)
++        self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
++        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
++
++    def _check_before_run(self):
++        """Check if all files are available before going deeper"""
++        if not osp.exists(self.dataset_dir):
++            raise RuntimeError("'{}' is not available".format(self.dataset_dir))
++        if not osp.exists(self.train_dir):
++            raise RuntimeError("'{}' is not available".format(self.train_dir))
++        if not osp.exists(self.query_dir):
++            raise RuntimeError("'{}' is not available".format(self.query_dir))
++        if not osp.exists(self.gallery_dir):
++            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
++
++    def _process_dir(self, dir_path, relabel=False):
++        img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
++        pattern = re.compile(r'([-\d]+)_(\d+)_(\d+)')
++
++        pid_container = set()
++        for img_path in img_paths:
++            pid, _, _ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            pid_container.add(pid)
++        pid2label = {pid: label for label, pid in enumerate(pid_container)}
++
++        dataset = []
++        for img_path in img_paths:
++            pid, camid,_ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            assert 0 <= pid <= 776  # pid == 0 means background
++            assert 0 <= camid <= 20
++            #camid -= 1  # index starts from 0
++            if relabel: pid = pid2label[pid]
++            dataset.append((img_path, pid, camid))
++
++        return dataset
++
+diff --git a/data/datasets/eval_reid.py b/data/datasets/eval_reid.py
+index 38f9783..ed855cb 100644
+--- a/data/datasets/eval_reid.py
++++ b/data/datasets/eval_reid.py
+@@ -29,13 +29,19 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
+ 
+         # remove gallery samples that have the same pid and camid with query
+         order = indices[q_idx]
+-        remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
++        #print(order, q_idx, q_pid, g_pids[order])
++        #remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
++        remove = (g_pids[order] != q_pid)
+         keep = np.invert(remove)
++        #keep = np.ones(order.size).astype(bool)
+ 
+         # compute cmc curve
+         # binary vector, positions with value 1 are correct matches
+-        orig_cmc = matches[q_idx][keep]
++        #orig_cmc = matches[q_idx][keep]
++        orig_cmc = matches[q_idx]
++        
+         if not np.any(orig_cmc):
++            print('No entries')
+             # this condition is true when query identity does not appear in gallery
+             continue
+ 
+diff --git a/data/datasets/jaguar.py b/data/datasets/jaguar.py
+index e69de29..8f68fd5 100644
+--- a/data/datasets/jaguar.py
++++ b/data/datasets/jaguar.py
+@@ -0,0 +1,85 @@
++import glob
++import re
++
++import os.path as osp
++
++from .bases import BaseImageDataset
++
++
++class Jaguar(BaseImageDataset):
++    """
++       VeRi-776
++       Reference:
++       Liu, Xinchen, et al. "Large-scale vehicle re-identification in urban surveillance videos." ICME 2016.
++
++       URL:https://vehiclereid.github.io/VeRi/
++
++       Dataset statistics:
++       # identities: 776
++       # images: 37778 (train) + 1678 (query) + 11579 (gallery)
++       # cameras: 20
++       """
++
++    dataset_dir = 'jaguar'
++
++    def __init__(self, root='../', verbose=True, **kwargs):
++        super(Jaguar, self).__init__()
++        self.dataset_dir = osp.join(root, self.dataset_dir)
++        self.train_dir = osp.join(self.dataset_dir, 'image_train')
++        self.query_dir = osp.join(self.dataset_dir, 'image_query')
++        self.gallery_dir = osp.join(self.dataset_dir, 'image_gallery')
++
++        self._check_before_run()
++
++        train = self._process_dir(self.train_dir, relabel=True)
++        query = self._process_dir(self.query_dir, relabel=False)
++        gallery = self._process_dir(self.gallery_dir, relabel=False)
++        #print('Train: {}, Query: {}, Gallery: {}'.format(len(train), len(query), len(gallery)))
++
++        if verbose:
++            print("=> Jaguar Dataset loaded")
++            self.print_dataset_statistics(train, query, gallery)
++
++        self.train = train
++        self.query = query
++        self.gallery = gallery
++
++        self.num_train_pids, self.num_train_imgs, self.num_train_cams = self.get_imagedata_info(self.train)
++        self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
++        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
++
++    def _check_before_run(self):
++        """Check if all files are available before going deeper"""
++        if not osp.exists(self.dataset_dir):
++            raise RuntimeError("'{}' is not available".format(self.dataset_dir))
++        if not osp.exists(self.train_dir):
++            raise RuntimeError("'{}' is not available".format(self.train_dir))
++        if not osp.exists(self.query_dir):
++            raise RuntimeError("'{}' is not available".format(self.query_dir))
++        if not osp.exists(self.gallery_dir):
++            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
++
++    def _process_dir(self, dir_path, relabel=False):
++        img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
++        #print('Total images in {}: {}'.format(dir_path, len(img_paths)))
++        pattern = re.compile(r'([-\d]+)_(\d+)_(\d+)')
++
++        pid_container = set()
++        for img_path in img_paths:
++            pid, _, _ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            pid_container.add(pid)
++        pid2label = {pid: label for label, pid in enumerate(pid_container)}
++
++        dataset = []
++        for img_path in img_paths:
++            pid, camid,_ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            assert 0 <= pid <= 776  # pid == 0 means background
++            assert 0 <= camid <= 20
++            #camid -= 1  # index starts from 0
++            if relabel: pid = pid2label[pid]
++            dataset.append((img_path, pid, camid))
++
++        return dataset
++
+diff --git a/modeling/backbones/resnet.py b/modeling/backbones/resnet.py
+index 86364d2..a4e7b48 100644
+--- a/modeling/backbones/resnet.py
++++ b/modeling/backbones/resnet.py
+@@ -94,13 +94,16 @@ class ResNet(nn.Module):
+         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+                                bias=False)
+         self.bn1 = nn.BatchNorm2d(64)
+-        # self.relu = nn.ReLU(inplace=True)   # add missed relu
++        #self.relu = nn.ReLU(inplace=True)   # add missed relu
+         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
++        #self.dropout = nn.Dropout(0.5)
+         self.layer1 = self._make_layer(block, 64, layers[0])
+         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
++        #self.dropout1 = nn.Dropout(0.5)
+         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+         self.layer4 = self._make_layer(
+             block, 512, layers[3], stride=last_stride)
++        #self.dropout2 = nn.Dropout(0.5)
+ 
+     def _make_layer(self, block, planes, blocks, stride=1):
+         downsample = None
+@@ -122,13 +125,16 @@ class ResNet(nn.Module):
+     def forward(self, x):
+         x = self.conv1(x)
+         x = self.bn1(x)
+-        # x = self.relu(x)    # add missed relu
++        #x = self.relu(x)    # add missed relu
+         x = self.maxpool(x)
++        #x = self.dropout(x)
+ 
+         x = self.layer1(x)
+         x = self.layer2(x)
++        #x = self.dropout1(x)
+         x = self.layer3(x)
+         x = self.layer4(x)
++        #x = self.dropout2(x)
+ 
+         return x
+ 
+diff --git a/modeling/baseline.py b/modeling/baseline.py
+index f04f786..8a6cbd3 100644
+--- a/modeling/baseline.py
++++ b/modeling/baseline.py
+@@ -10,6 +10,7 @@ from torch import nn
+ from .backbones.resnet import ResNet, BasicBlock, Bottleneck
+ from .backbones.senet import SENet, SEResNetBottleneck, SEBottleneck, SEResNeXtBottleneck
+ from .backbones.resnet_ibn_a import resnet50_ibn_a
++import torchvision.models as models
+ 
+ 
+ def weights_init_kaiming(m):
+@@ -127,8 +128,11 @@ class Baseline(nn.Module):
+                               last_stride=last_stride)
+         elif model_name == 'resnet50_ibn_a':
+             self.base = resnet50_ibn_a(last_stride)
++        elif model_name == 'densenet':
++            self.base = models.densenet121(pretrained=True)
++            self.base.classifier = nn.Sequential(nn.Dropout(0.5), nn.Linear(1024, self.in_planes))
+ 
+-        if pretrain_choice == 'imagenet':
++        if pretrain_choice == 'imagenet' and not 'densenet' == model_name:
+             self.base.load_param(model_path)
+             print('Loading pretrained ImageNet model......')
+ 
+@@ -152,7 +156,8 @@ class Baseline(nn.Module):
+ 
+     def forward(self, x):
+ 
+-        global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
++        #global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
++        global_feat = self.base(x)
+         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
+ 
+         if self.neck == 'no':
+@@ -172,8 +177,15 @@ class Baseline(nn.Module):
+                 return global_feat
+ 
+     def load_param(self, trained_path):
++        '''
+         param_dict = torch.load(trained_path)
+         for i in param_dict:
+             if 'classifier' in i:
+                 continue
+             self.state_dict()[i].copy_(param_dict[i])
++        '''
++        param_dict = torch.load(trained_path)
++        for k, v in param_dict.state_dict().items():
++            if 'classifier' in k:
++                continue
++            self.state_dict()[k].copy_(param_dict.state_dict()[k])
+diff --git a/tools/train.py b/tools/train.py
+index 3bb7835..5fc6faa 100644
+--- a/tools/train.py
++++ b/tools/train.py
+@@ -43,8 +43,10 @@ def train(cfg):
+             print('Start epoch:', start_epoch)
+             path_to_optimizer = cfg.MODEL.PRETRAIN_PATH.replace('model', 'optimizer')
+             print('Path to the checkpoint of optimizer:', path_to_optimizer)
+-            model.load_state_dict(torch.load(cfg.MODEL.PRETRAIN_PATH))
+-            optimizer.load_state_dict(torch.load(path_to_optimizer))
++            #model.load_state_dict(torch.load(cfg.MODEL.PRETRAIN_PATH))
++            model = torch.load(cfg.MODEL.PRETRAIN_PATH)
++            #optimizer.load_state_dict(torch.load(path_to_optimizer))
++            optimizer = torch.load(path_to_optimizer)
+             scheduler = WarmupMultiStepLR(optimizer, cfg.SOLVER.STEPS, cfg.SOLVER.GAMMA, cfg.SOLVER.WARMUP_FACTOR,
+                                           cfg.SOLVER.WARMUP_ITERS, cfg.SOLVER.WARMUP_METHOD, start_epoch)
+         elif cfg.MODEL.PRETRAIN_CHOICE == 'imagenet':
+@@ -86,10 +88,14 @@ def train(cfg):
+             print('Path to the checkpoint of center_param:', path_to_center_param)
+             path_to_optimizer_center = cfg.MODEL.PRETRAIN_PATH.replace('model', 'optimizer_center')
+             print('Path to the checkpoint of optimizer_center:', path_to_optimizer_center)
+-            model.load_state_dict(torch.load(cfg.MODEL.PRETRAIN_PATH))
+-            optimizer.load_state_dict(torch.load(path_to_optimizer))
+-            center_criterion.load_state_dict(torch.load(path_to_center_param))
+-            optimizer_center.load_state_dict(torch.load(path_to_optimizer_center))
++            #model.load_state_dict(torch.load(cfg.MODEL.PRETRAIN_PATH))
++            model = torch.load(cfg.MODEL.PRETRAIN_PATH)
++            #optimizer.load_state_dict(torch.load(path_to_optimizer))
++            optimizer = torch.load(path_to_optimizer)
++            #center_criterion.load_state_dict(torch.load(path_to_center_param))
++            center_criterion = torch.load(path_to_center_param)
++            #optimizer_center.load_state_dict(torch.load(path_to_optimizer_center))
++            optimizer_center = torch.load(path_to_optimizer_center)
+             scheduler = WarmupMultiStepLR(optimizer, cfg.SOLVER.STEPS, cfg.SOLVER.GAMMA, cfg.SOLVER.WARMUP_FACTOR,
+                                           cfg.SOLVER.WARMUP_ITERS, cfg.SOLVER.WARMUP_METHOD, start_epoch)
+         elif cfg.MODEL.PRETRAIN_CHOICE == 'imagenet':
+@@ -146,7 +152,7 @@ def main():
+         with open(args.config_file, 'r') as cf:
+             config_str = "\n" + cf.read()
+             logger.info(config_str)
+-    logger.info("Running with config:\n{}".format(cfg))
++    #logger.info("Running with config:\n{}".format(cfg))
+ 
+     if cfg.MODEL.DEVICE == "cuda":
+         os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID    # new add by gu
+diff --git a/train.bat b/train.bat
+index e69de29..9c988c5 100644
+--- a/train.bat
++++ b/train.bat
+@@ -0,0 +1 @@
++python tools/train.py --config_file=configs\softmax_triplet_with_center.yml MODEL.DEVICE_ID "('0')" DATASETS.NAMES "('elp')" DATASETS.ROOT_DIR "('data')" OUTPUT_DIR "('elp_test')"
+\ No newline at end of file

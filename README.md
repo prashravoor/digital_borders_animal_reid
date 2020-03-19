@@ -78,4 +78,27 @@ Once the model has been trained (using the open-reid strong baseline repo), copy
 Conversion to ONNX is required since PyTorch on CPU is extremely slow. <br>
 Run the code to test feature extraction accuracy and show the TSNE graphs using `python3 test_triplet_loss.py <image folder> <ONNX model path>`
 
+## Training Using Re-id Strong Baseline
+Download the Open-Reid code base from [here] (https://github.com/Cysu/open-reid.git) <br>
+Apply the changes as required using the patch files stored in `patches/open_reid` folder <br>
+Download the Re-id strong baseline code from [here](https://github.com/michuanhaohao/reid-strong-baseline.git) <br>
+Apply the changes as required using the patch files stored in `patches/reid_strong_baseline` folder <br>
 
+### Prepare the dataset
+Multiple scripts are needed to be run before the dataset can be used for reid-strong baseline. All required scripts are listed below. Run them in the same order. The sample assumes images are stored in a folder named `ELPephants\reid_faces`. The metdatafile `class_mapping.txt` which contains each file to class id mapping is required to be present in the same folder<br>
+```bash
+python3 create_open_reid_splits.py ELPephants\reid_faces ELPephants\faces_open_reid # Creates two folders, train and test
+python3 rename_images_to_int_names.py ELPephants\faces_open_reid\train # Renames all files to integer names as needed by Open Re-id
+python3 remap_labels_contiguous.py ELPephants\faces_open_reid\train # If there are any missing identities, replace them with continuous ids
+# Move to Open Reid code base, and start the run and stop it once the datasets are created. It creates the images, splits.json and meta.json files
+# ...
+python3 partition_ds_for_open_reid.py ..\open_reid\amur_data\elp ..\reid-strong-baseline\data\elp # Optional split number between [0,10] can also be specified
+```
+
+### Training
+From the reid-strong-baseline folder, run the appropriate training file by specifying the requried config file <br>
+For example: `train.bat softmax_triplet_with_center_elp.yml`
+
+### Testing
+Once the training is completed, test the performance over the test data <br>
+`python3 test_model_reid.py ..\reid-strong-baseline\elp_test\resnet50_model_100.pth ELPephants\faces_open_reid\test ..\reid-strong-baseline\configs\elp_softmax_triplet_with_center.yml
