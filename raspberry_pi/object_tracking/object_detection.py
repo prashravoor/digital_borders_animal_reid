@@ -45,7 +45,7 @@ class ObjectDetector:
             xmax = int(min(self.IMG_WIDTH,(boxes[i][3] * self.IMG_WIDTH)))
 
             results.append(DetectionResult(BoundingBox(ymin, xmin, ymax, xmax),
-                                scores[i], classes[i]))
+                                float(scores[i]), int(classes[i])))
 
         return results
 

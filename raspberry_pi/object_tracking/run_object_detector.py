@@ -8,7 +8,7 @@ import cv2
 import threading
 
 DEVICE_NAME = 'raspberrypi1'
-LABELS = {0: 'Unknown', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
+LABELS = {0: 'Human', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
 
 def drawBbOnImage(image, detections):
 # Get bounding box coordinates and draw box
@@ -41,8 +41,8 @@ def drawBbOnImage(image, detections):
                 0.7,
                 (0, 0, 0), 2) # Draw label text
 
-def sendImageAsync(client, image):
-    th = threading.Thread(target=client.publishImage, args=[image])
+def sendImageAsync(client, image, detections):
+    th = threading.Thread(target=client.publishImageWithDetections, args=[image, detections])
     th.setDaemon(True)
     th.start()
 
@@ -80,14 +80,15 @@ if __name__ == '__main__':
                 start = time.time()
                 results = detector.getBoundingBoxes(image)
                 if len(results) > 0:
-                        publisher.publishDetection(results)
+                        # publisher.publishDetection(results)
+                        sendImageAsync(imagePublisher, image, results)
+
                 if display:
                     print('Got results: {}, Time: {:.4f}s'.format(results, time.time() - start))
                     image = cv2.resize(image, 
                             (detector.IMG_HEIGHT, detector.IMG_WIDTH))
                     if len(results) > 0:
                         drawBbOnImage(image, results)
-                        sendImageAsync(imagePublisher, image)
 
                     cv2.imshow('test', image)
                     cv2.waitKey(1)

@@ -3,6 +3,7 @@ import cv2
 import base64
 import time
 import traceback
+import pickle
 
 class MqttClient:
     def __init__(self, channel, hostname):
@@ -41,8 +42,20 @@ class TrackPublisher:
 class ImagePublisher:
     def __init__(self, name, server):
         self.server = server
-        self.client = MqttClient('{}/image'.format(name), server)
+        self.client = MqttClient('{}'.format(name), server)
         self.name = name
+
+    def publishImageWithDetections(self, image, dets):
+        try:
+            start = time.time()
+            message = dict()
+            message['detections'] = str(dets)
+            message['image'] = cv2.imencode('.jpg', image)[1]
+            message = pickle.dumps(message)
+            self.client.message(message)
+            print('Image transmission time: {:.4f}s'.format(time.time() - start))
+        except:
+            traceback.print_exc()
 
     def publishImage(self, image):
         try:
