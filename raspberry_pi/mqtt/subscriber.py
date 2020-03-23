@@ -10,6 +10,11 @@ import json
 from im_utils import iou
 import numpy as np
 import traceback
+from id_association import IdAssociator, FeatureVectorDatabase
+from feature_extractor import FeatureExtractor
+import sys
+import cv2
+import pickle
 
 TrackedSubject = namedtuple('TrackedSubject', 'tracker timestamp')
 DetectionInfo = namedtuple('DetectionInfo', 'name activeDetections deterState')
@@ -25,93 +30,12 @@ MQTT_FRONTEND_REG = '{}/registration'.format(MQTT_FRONTEND_BASE)
 MQTT_FRONTEND_DET_HISTORY = '{}/detectionHistory'.format(MQTT_FRONTEND_BASE)
 
 LABELS = {0: 'Human', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
-unknownCounter = 0
 
-inMemoryPerClassDb = defaultdict(list)
-
-def associateIdentities(detections, devName):
-    global unknownCounter
-    if not isinstance(detections, Iterable):
-        return []
-
-    identities = []
-    # For each identity, find closest match and return
-    for det in detections:
-        classid = int(det.classid)
-        if classid not in LABELS:
-            LABELS[classid] = 'Unknown{}'.format(unknownCounter)
-            unknownCounter += 1
-
-        detName = '{}_{}'.format(devName, LABELS[classid])
-        if not isinstance(det, DetectionResult):
-            print('Malformed entry {}, failing operation...'.format(det))
-            return []
-
-        currentDetections = inMemoryPerClassDb[detName]
-        if len(currentDetections) == 0:
-            inMemoryPerClassDb[detName].append(det)
-            # First detection, assign label
-            name = '{}_{}_{}'.format(devName, LABELS[classid], len(inMemoryPerClassDb[detName]))
-        else:
-            # More than one existing detection, find correct one
-            # Find greatest IOU overlap. If < 0.25, new identity. If > 75%, same identity
-            iou_overlaps = [iou(det.bounding_box, x.bounding_box) for x in currentDetections]
-            if max(iou_overlaps) < 0.25: # New id
-                inMemoryPerClassDb[detName].append(det)
-                name = '{}_{}_{}'.format(devName, LABELS[classid], len(inMemoryPerClassDb[detName]))
-            else:
-                index = np.argmax(iou_overlaps)
-                inMemoryPerClassDb[index] = det
-                name = '{}_{}_{}'.format(devName, LABELS[classid], index + 1)
-        identities.append(name)
-
-
-    return identities
-                
-
-class DeviceMonitor:
-    def __init__(self, name, centralMonitor, imagePublisher, timeout = 10):
-        self.name = name
-        self.active_tracks = dict() # Per class object tracker lists
-        self.timeout = timeout # seconds
-        self.centralMonitor = centralMonitor
-        self.monitor = SubjectMonitor(timeout)
-        self.imagePublisher = TimedImagePublisher(imagePublisher)
-
-    def __repr__(self):
-        return self.name
-
-    def onEvent(self, client, userdata, msg):
-        #print('Got message for device: {}: {}'.format(self.name, msg.payload.decode()))
-        if msg.topic.split('/')[-1] == 'image':
-            self.imagePublisher.publishImage(msg.payload)
-            return
-
-        detections = eval(msg.payload.decode())
-
-        if not isinstance(detections, Iterable):
-            print('Invalid type provided in event, expected iterable, got: {}'.format(type(detections)))
-            return
-
-        identities = associateIdentities(detections, self.name)
-        if not len(identities) == len(detections):
-            print('Data malformed, id association failed')
-            return
-        
-        for det,id in zip(detections, identities):
-            self.addDetection(det, id, len(detections))
-
-    def addDetection(self, detection, idf, total):
-        self.monitor.addDetection(detection, idf)
-        self.centralMonitor.addDetection(self.name, detection, idf, total)
-
-    def getActiveTracks(self):
-        return self.monitor.getActiveDetections()
- 
 class SubjectMonitor:
-    def __init__(self, timeout=3000):
+    def __init__(self, idAssociator, timeout=3000):
         self.detections = dict()
         self.timeout = timeout
+        self.idAssociator = idAssociator
 
     def addDetection(self, detection, idf):
         curtime = time.time()
@@ -147,8 +71,9 @@ class SubjectMonitor:
         self.detections = dict()
 
 class CrossCameraMonitor:
-    def __init__(self, feClient, timeout=3000):
+    def __init__(self, feClient, idAssociator, timeout=3000):
         self.registered = dict()
+        self.DETER_STATES = {0: 'None', 1: 'alert', 2: 'success', 3: 'failed'}
         self.feClient = feClient
         self.timeout = timeout
         self.inCounter = defaultdict(int)
@@ -157,6 +82,12 @@ class CrossCameraMonitor:
         self.AREA_THRESH = 0.3 * (300 * 300) # Covers 50% of the image
         self.staticMap = defaultdict(bool)
         self.wasAlerted = defaultdict(bool)
+        self.idAssociator = idAssociator
+        self.detHistoryTimeout = 10 # 10 seconds
+        self.lock = threading.Lock()
+        th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
+        th.setDaemon(True)
+        th.start()
 
     def sendFeDetectionMessage(self, device, numDetections, deter):
         channel = '{}/{}'.format(MQTT_FRONTEND_BASE, device)
@@ -167,17 +98,16 @@ class CrossCameraMonitor:
         if name in self.registered:
             print('{} already registered, ignoring...')
         else:
-            self.registered[name] = SubjectMonitor(self.timeout)
+            self.registered[name] = SubjectMonitor(self.timeout, self.idAssociator)
             # Send message to frontend
             self.feClient.message(MQTT_FRONTEND_REG, name)
 
-    def addDetection(self, name, detection, idf, numDetections):
+    def detectionAdded(self, name, idf, detection):
+        deterState = 0
         if name in self.registered:
-            deterState = None 
-            self.registered[name].addDetection(detection, idf)
             track = self.registered[name].getLatestTracklet(idf)
             if track is None:
-                return
+                return deterState
 
             if track.zdir == 'i':
                 self.inCounter[idf] += 1
@@ -191,7 +121,7 @@ class CrossCameraMonitor:
             elif track.zdir == 'o':
                 self.inCounter[idf] = 0
                 if self.wasAlerted[idf]:
-                    deterState = 'success'
+                    deterState = 2 
                 self.staticMap[idf] = False
                 self.wasAlerted[idf] = False
             else:
@@ -201,11 +131,11 @@ class CrossCameraMonitor:
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
-                deterState = 'alert'
+                deterState = 1
                 self.wasAlerted[idf] = True
-            self.sendFeDetectionMessage(name, numDetections, deterState)
         else:
             print('No registered device for {}'.format(name))
+        return deterState
 
     def timerFunc(self, name, idf):
         if self.inCounter[idf] > 0 and not self.staticMap[idf]:
@@ -248,24 +178,82 @@ class CrossCameraMonitor:
     def getRegisteredDevices(self):
         return list(self.registered.keys())
 
+    def sendDetectionHistory(self, periodic=True):
+        results = []
+        for idf, tracks in self.getActiveDetections().items():
+            if not len(tracks) > 0:
+                continue
+            # Pick latest device only
+            det = tracks[-1]
+            time = int(det[2] * 1000) # Conver to ms since epoch
+            tr = ''
+            if len(det[1]) > 0:
+                tr = getDirections([det[1][-1]])[0]
+            results.append(DetectionHistory(idf, det[0], tr, time)._asdict())
 
-    def clearDetections(self):
+        self.feClient.message(MQTT_FRONTEND_DET_HISTORY, json.dumps(results))
+        if periodic:
+            th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
+            th.setDaemon(True)
+            th.start()
+
+    def receivedDetection(self, device, detectionMap):
+        # Map has detections, image keys
+        try:
+            self.lock.acquire()
+            detections = eval(detectionMap['detections'])
+            # image = np.array(eval(detectionMap['image'])).astype(np.float32)
+            image = np.frombuffer(detectionMap['image'], dtype='uint8')
+            image = cv2.imdecode(image, flags=1)
+            identities = self.idAssociator.update(device, image, detections)
+            deterState = 0
+            monitor = self.registered[device]
+            for i in range(len(identities)):
+                monitor.addDetection(detections[i], identities[i])
+                tmp = self.detectionAdded(device, identities[i], detections[i])
+                deterState = max(deterState, tmp)
+
+            self.sendFeDetectionMessage(device, len(detections), self.DETER_STATES[deterState])
+        finally:
+            self.lock.release()
+
+    def refresh(self, client, userdata, msg):
+        print()
+        print('-----------------')
+        print('Current active devices: {}'.format(self.registrations))
+        for reg in self.registered:
+            tracks = reg.getActiveDetections()
+            print('Total {} active tracks found for device: {}'.format(len(tracks), reg))
+            for t,v in tracks.items():
+                # print('Found Total entities with class id {}: {}'.format(t, len(v)))
+                print('Movements of {}: {}'.format(t, getDirections(v[0])))
+
+        print()
+        print('History of tracks:')
+        for idf,tracks in self.getActiveDetections().items():
+            print('Identity: {}, Movement History: {}'.format(idf, [(x[0], getDirections(x[1]), x[2]) for x in tracks]))
+
+        print('-----------------')
+        print()
+
+        # Also write data to frontend
+        for k in self.getRegisteredDevices():
+            self.frontend.message(MQTT_FRONTEND_REG, k)
+
+        self.sendDetectionHistory(periodic=False)
+
+    def clearDetections(self, client, userdata, msg):
         for _,reg in self.registered.items():
             reg.clearDetections()
-   
+ 
 class CentralServer:
-    def __init__(self, server, port=1883, feport=9001):
+    def __init__(self, server, idAssociator, port=1883, feport=9001):
         self.subscriber = MqttSubscriber(server, port)
-        self.topic_funcs = {MQTT_REG_PATH : self.register, MQTT_REFRESH: self.refresh, MQTT_CLEAR: self.clearDetections}
-        self.registrations = []
         self.frontend = MqttWebsocketClient(server, feport);
-        self.monitor = CrossCameraMonitor(self.frontend)
-        self.detHistoryTimeout = 10 # 10 seconds
-        th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
-        th.setDaemon(True)
-        th.start()
+        self.monitor = CrossCameraMonitor(self.frontend, idAssociator)
         self.server = server
         self.fePort = feport
+        self.topic_funcs = {MQTT_REG_PATH : self.register, MQTT_REFRESH: self.monitor.refresh, MQTT_CLEAR: self.monitor.clearDetections}
 
     def register(self, client, userdata, msg):
         parts = msg.payload.decode().split(',')
@@ -277,60 +265,14 @@ class CentralServer:
                 print('Warning: Device already registered...')
             else:
                 client.subscribe(parts[1])
-                client.subscribe('{}/image'.format(parts[1]))
-                reg = DeviceMonitor(parts[0], self.monitor, ImageWsPublisher('{}/{}'.format(MQTT_FRONTEND_BASE, parts[1]), self.server, self.fePort))
-                self.registrations.append(reg)
-                self.topic_funcs[parts[1]] = reg.onEvent
-                self.topic_funcs['{}/image'.format(parts[1])] = reg.onEvent
                 self.monitor.addRegistration(parts[0])
+                self.topic_funcs[parts[1]] = self.receivedDetection
 
-    def sendDetectionHistory(self, periodic=True):
-        results = []
-        for idf, tracks in self.monitor.getActiveDetections().items():
-            if not len(tracks) > 0:
-                continue
-            # Pick latest device only
-            det = tracks[-1]
-            time = int(det[2] * 1000) # Conver to ms since epoch
-            tr = ''
-            if len(det[1]) > 0:
-                tr = getDirections([det[1][-1]])[0]
-            results.append(DetectionHistory(idf, det[0], tr, time)._asdict())
-
-        self.frontend.message(MQTT_FRONTEND_DET_HISTORY, json.dumps(results))
-        if periodic:
-            th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
-            th.setDaemon(True)
-            th.start()
-
-
-    def refresh(self, client, userdata, msg):
-        print()
-        print('-----------------')
-        print('Current active devices: {}'.format(self.registrations))
-        for reg in self.registrations:
-            tracks = reg.getActiveTracks()
-            print('Total {} active tracks found for device: {}'.format(len(tracks), reg))
-            for t,v in tracks.items():
-                # print('Found Total entities with class id {}: {}'.format(t, len(v)))
-                print('Movements of {}: {}'.format(t, getDirections(v[0])))
-
-        print()
-        print('History of tracks:')
-        for idf,tracks in self.monitor.getActiveDetections().items():
-            print('Identity: {}, Movement History: {}'.format(idf, [(x[0], getDirections(x[1]), x[2]) for x in tracks]))
-
-        print('-----------------')
-        print()
-
-        # Also write data to frontend
-        for k in self.monitor.getRegisteredDevices():
-            self.frontend.message(MQTT_FRONTEND_REG, k)
-
-        self.sendDetectionHistory(periodic=False)
-
-    def clearDetections(self, client, userdata, msg):
-        self.monitor.clearDetections()
+    def receivedDetection(self, client, userdata, msg):
+        #detection = json.loads(msg.payload.decode())
+        #print(msg.payload.decode())
+        detection = pickle.loads(msg.payload)
+        self.monitor.receivedDetection(msg.topic, detection)
 
     def on_message(self, client, userdata, msg):
         try:
@@ -352,5 +294,28 @@ class CentralServer:
         self.subscriber.run(self.onConnect, self.on_message)        
 
 if __name__ == '__main__':
-    server = CentralServer(MQTT_SERVER)
+    args = sys.argv
+    if not len(args) == 2:
+        print('Usage: cmd modelpath')
+        exit()
+
+    modelpath = args[1]
+
+    print('Loading feature extractor...')
+    start = time.time()
+    fe = FeatureExtractor(modelpath)
+    fe.loadModel()
+    print('Model Load time: {:.4f}s'.format(time.time() - start))
+# Change to use appropriate models
+    feMap = dict()
+    for k,_ in LABELS.items():
+        feMap[k] = fe
+
+    print('Warming up model...')
+    fe.extract(np.random.randint(0, 255, (fe.INPUT_HEIGHT, fe.INPUT_HEIGHT, 3)).astype(np.uint8))
+
+    fedb = FeatureVectorDatabase()
+    idAssociator = IdAssociator(feMap, fedb)
+
+    server = CentralServer(MQTT_SERVER, idAssociator)
     server.run()

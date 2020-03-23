@@ -69,3 +69,6 @@ def iou(pred_box, gt_box):
 def loadImageAsTensor(imageFile):
     image = tf.io.read_file(imageFile)
     return tf.image.decode_jpeg(image)
+
+def extractImageFromBoundingBox(image, box):
+    return image[box.ymin:box.ymax, box.xmin:box.xmax,:]
