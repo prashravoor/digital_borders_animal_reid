@@ -4,14 +4,14 @@ import cv2
 from utils import BoundingBox, DetectionResult
 
 class ObjectDetector:
-    def __init__(self, modelpath, width=300, height=300, numthreads=4):
+    def __init__(self, modelpath, width=300, height=300, numthreads=2):
         self.modelpath = modelpath
         self.IMG_WIDTH = width
         self.IMG_HEIGHT = height
         self.interpreter = None
         self.MAX_BOXES_PER_IMAGE = 10
         self.IOU_THRESHOLD = 0.5
-        self.SCORE_THRESHOLD = 0.5
+        self.SCORE_THRESHOLD = 0.4
         self.NUM_THREADS = numthreads
 
     def loadModel(self):
@@ -47,7 +47,7 @@ class ObjectDetector:
             results.append(DetectionResult(BoundingBox(ymin, xmin, ymax, xmax),
                                 float(scores[i]), int(classes[i])))
 
-        return results
+        return results, image
 
 if __name__ == '__main__':
     import sys

@@ -74,11 +74,11 @@ if __name__ == '__main__':
             time.sleep(2) # Camera warmup
             for _ in camera.capture_continuous(stream, format='rgb'):
                 image = stream.array
-                image = image[:,:,(2,1,0)]
+                #image = image[:,:,(2,1,0)]
                 stream.truncate()
                 stream.seek(0)
                 start = time.time()
-                results = detector.getBoundingBoxes(image)
+                results, image = detector.getBoundingBoxes(image)
                 if len(results) > 0:
                         # publisher.publishDetection(results)
                         sendImageAsync(imagePublisher, image, results)
