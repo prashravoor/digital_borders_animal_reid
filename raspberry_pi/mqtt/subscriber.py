@@ -1,13 +1,13 @@
 import paho.mqtt.client as mqtt
 import time
 from object_tracker import Tracker, Tracklet, mergeTracklets, getDirections
+from im_utils import drawBoundingBoxLabel
 from collections import namedtuple, Iterable, defaultdict
 from utils import DetectionResult, BoundingBox
 from mqtt_subscriber import MqttSubscriber
 from mqtt_publisher import MqttWebsocketClient,ImageWsPublisher,TimedImagePublisher
 import threading
 import json
-from im_utils import iou
 import numpy as np
 import traceback
 from id_association import IdAssociator, FeatureVectorDatabase
@@ -19,7 +19,6 @@ import pickle
 TrackedSubject = namedtuple('TrackedSubject', 'tracker timestamp')
 DetectionInfo = namedtuple('DetectionInfo', 'name activeDetections deterState')
 DetectionHistory = namedtuple('DetectionHistory', 'name lastSeen travelDirection lastSeenTime')
-CrossCamDetection = namedtuple('CrossCamDetection', 'name lastSeen timestamp bbox')
 
 MQTT_SERVER = "localhost"
 MQTT_REG_PATH = "registration"
@@ -77,20 +76,32 @@ class CrossCameraMonitor:
         self.feClient = feClient
         self.timeout = timeout
         self.inCounter = defaultdict(int)
-        self.DETER_TIMEOUT = 6
-        self.timerSet = defaultdict(bool)
-        self.AREA_THRESH = 0.3 * (300 * 300) # Covers 50% of the image
+        self.outCounter = defaultdict(int)
+        self.DETER_TIMEOUT = 3
+        self.AREA_THRESH = 0.4 * (300 * 300) # Covers 50% of the image
+        self.COUNT_THRESH = 2 # 2 continous frames to confirm movement direction
         self.staticMap = defaultdict(bool)
         self.wasAlerted = defaultdict(bool)
         self.idAssociator = idAssociator
         self.detHistoryTimeout = 10 # 10 seconds
         self.lock = threading.Lock()
+        self.imagePublishers = dict()
+        self.threadMap = dict()
+        self.activeDetectionMap = dict()
+        self.activeDetectionLock = threading.Lock() 
+        self.threadid = 0
+        self.threadMapLock = threading.Lock()
+        self.ACTIVE_DET_TIMEOUT = 5
+
+
         th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
         th.setDaemon(True)
         th.start()
 
     def sendFeDetectionMessage(self, device, numDetections, deter):
         channel = '{}/{}'.format(MQTT_FRONTEND_BASE, device)
+        if deter == self.DETER_STATES[0]:
+            deter = None
         data = DetectionInfo(device, numDetections, deter)
         self.feClient.message(channel, json.dumps(data._asdict()))
 
@@ -98,7 +109,10 @@ class CrossCameraMonitor:
         if name in self.registered:
             print('{} already registered, ignoring...')
         else:
-            self.registered[name] = SubjectMonitor(self.timeout, self.idAssociator)
+            self.registered[name] = SubjectMonitor(self.idAssociator, self.timeout)
+            self.imagePublishers[name] = TimedImagePublisher(
+                    ImageWsPublisher('{}/{}'.format(MQTT_FRONTEND_BASE, name),
+                                      self.feClient.server, self.feClient.port))
             # Send message to frontend
             self.feClient.message(MQTT_FRONTEND_REG, name)
 
@@ -111,23 +125,36 @@ class CrossCameraMonitor:
 
             if track.zdir == 'i':
                 self.inCounter[idf] += 1
-                if not self.timerSet[idf]:
-                    self.timerSet[idf] = True
-                # Start timer in case there were no detections
-                    timer = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf])
-                    timer.setDaemon(True)
-                    timer.start()
-                    self.staticMap[idf] = False
+                self.outCounter[idf] = 0
+
+                self.threadMapLock.acquire()
+                if idf in self.threadMap:
+                    # Start timer in case there were no detections
+                    # Stop any active threads
+                    print('Existing thread found, deactivating...')
+                    self.threadMap[idf][1].cancel()
+                    del self.threadMap[idf]
+
+                timer = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf, self.threadid])
+                self.threadMap[idf] = (self.threadid, timer)  # Overwrite event
+                self.threadid += 1
+                self.threadMapLock.release()
+
+                timer.setDaemon(True)
+                timer.start()
+                self.staticMap[idf] = False
+
             elif track.zdir == 'o':
-                self.inCounter[idf] = 0
-                if self.wasAlerted[idf]:
-                    deterState = 2 
+                self.outCounter[idf] += 1
+                self.inCounter[idf] = 0 
+                if self.wasAlerted[idf] and self.outCounter[idf] > self.COUNT_THRESH:
+                    deterState = 2
                 self.staticMap[idf] = False
                 self.wasAlerted[idf] = False
             else:
                 self.staticMap[idf] = True
 
-            if self.inCounter[idf] > 2 or Tracker([])._getBboxArea(detection.bounding_box) > self.AREA_THRESH:
+            if self.inCounter[idf] > self.COUNT_THRESH or Tracker([])._getBboxArea(detection.bounding_box) > self.AREA_THRESH:
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
@@ -135,34 +162,59 @@ class CrossCameraMonitor:
                 self.wasAlerted[idf] = True
         else:
             print('No registered device for {}'.format(name))
+
         return deterState
 
-    def timerFunc(self, name, idf):
+    def timerFunc(self, name, idf, thid):
+        self.threadMapLock.acquire()
+        if idf in self.threadMap:
+            if not self.threadMap[idf][0] == thid:
+                self.threadMapLock.release()
+                print('Been replaced by another thread...')
+                return # Replaced by another thread
+            del self.threadMap[idf]
+
+        self.threadMapLock.release()
+
         if self.inCounter[idf] > 0 and not self.staticMap[idf]:
             print()
             print('!!!!!!!!!!!!!!!!')
             print('Deterring animal {} failed, sending SMS'.format(idf))
             print('!!!!!!!!!!!!!!!!')
             print()
-            self.timerSet[idf] = False
             self.sendFeDetectionMessage(name, 1, 'failed')
-
+            self.inCounter[idf] = 0
         elif self.staticMap[idf]:
             print()
             print('Watching animal {} for some more time...'.format(idf))
             print()
             self.staticMap[idf] = False
-            th = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf])
-            th.setDaemon(True)
-            th.start()
-            self.timerSet[idf] = True
+            th = threading.Timer(self.DETER_TIMEOUT, self.timerFunc, [name, idf, thid])
+            self.threadMapLock.acquire()
+            if idf not in self.threadMap: # If there is an entry, another thread has replaced this one, so remove it
+                self.threadMap[idf] = (thid, th)
+                th.setDaemon(True)
+                th.start()
+            self.threadMapLock.release()
             self.sendFeDetectionMessage(name, 1, 'alert')
-        else:
+        elif self.outCounter[idf] > 0: 
             print()
             print('Animal {} successfully deterred...'.format(idf))
             print()
-            self.timerSet[idf] = False
             self.sendFeDetectionMessage(name, 0, 'success')
+            self.outCounter[idf] = 0
+        else:
+            print()
+            print('Resetting to normal...')
+            print()
+            self.sendFeDetectionMessage(name, 0, 'None')
+
+    def sendNoActiveDetectionsMessage(self, name):
+        self.activeDetectionLock.acquire()
+        if name in self.activeDetectionMap:
+            del self.activeDetectionMap[name]
+            self.sendFeDetectionMessage(name, 0, 'None')
+        self.activeDetectionLock.release()
 
     def getActiveDetections(self):
         # Combine tracklets from all registered device, sort them by time first
@@ -197,6 +249,13 @@ class CrossCameraMonitor:
             th.setDaemon(True)
             th.start()
 
+    def sendImage(self, name, image, dets, ids):
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        for i in range(len(dets)):
+            image = drawBoundingBoxLabel(image, ids[i], dets[i])
+
+        self.imagePublishers[name].publishImage(cv2.imencode('.jpg', image)[1])
+
     def receivedDetection(self, device, detectionMap):
         # Map has detections, image keys
         try:
@@ -206,6 +265,7 @@ class CrossCameraMonitor:
             image = np.frombuffer(detectionMap['image'], dtype='uint8')
             image = cv2.imdecode(image, flags=1)
             identities = self.idAssociator.update(device, image, detections)
+            identities = ['{}_{}'.format(LABELS[int(detections[i].classid)], identities[i]) for i in range(len(identities))]
             deterState = 0
             monitor = self.registered[device]
             for i in range(len(identities)):
@@ -214,15 +274,29 @@ class CrossCameraMonitor:
                 deterState = max(deterState, tmp)
 
             self.sendFeDetectionMessage(device, len(detections), self.DETER_STATES[deterState])
+            self.sendImage(device, image, detections, identities)
+
+            timer = threading.Timer(self.ACTIVE_DET_TIMEOUT, self.sendNoActiveDetectionsMessage, [device])
+            timer.setDaemon(True)
+
+            self.activeDetectionLock.acquire()
+            if device in self.activeDetectionMap:
+                self.activeDetectionMap[device].cancel() # Cancel any outstanding thread
+                del self.activeDetectionMap[device]
+            self.activeDetectionMap[device] = timer
+            self.activeDetectionLock.release()
+
+            timer.start()
+
         finally:
             self.lock.release()
 
     def refresh(self, client, userdata, msg):
         print()
         print('-----------------')
-        print('Current active devices: {}'.format(self.registrations))
+        print('Current active devices: {}'.format(self.registered))
         for reg in self.registered:
-            tracks = reg.getActiveDetections()
+            tracks = self.registered[reg].getActiveDetections()
             print('Total {} active tracks found for device: {}'.format(len(tracks), reg))
             for t,v in tracks.items():
                 # print('Found Total entities with class id {}: {}'.format(t, len(v)))
@@ -238,7 +312,7 @@ class CrossCameraMonitor:
 
         # Also write data to frontend
         for k in self.getRegisteredDevices():
-            self.frontend.message(MQTT_FRONTEND_REG, k)
+            self.feClient.message(MQTT_FRONTEND_REG, k)
 
         self.sendDetectionHistory(periodic=False)
 
@@ -249,7 +323,7 @@ class CrossCameraMonitor:
 class CentralServer:
     def __init__(self, server, idAssociator, port=1883, feport=9001):
         self.subscriber = MqttSubscriber(server, port)
-        self.frontend = MqttWebsocketClient(server, feport);
+        self.frontend = MqttWebsocketClient(server, feport)
         self.monitor = CrossCameraMonitor(self.frontend, idAssociator)
         self.server = server
         self.fePort = feport
@@ -269,8 +343,6 @@ class CentralServer:
                 self.topic_funcs[parts[1]] = self.receivedDetection
 
     def receivedDetection(self, client, userdata, msg):
-        #detection = json.loads(msg.payload.decode())
-        #print(msg.payload.decode())
         detection = pickle.loads(msg.payload)
         self.monitor.receivedDetection(msg.topic, detection)
 

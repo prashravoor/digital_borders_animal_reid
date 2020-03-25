@@ -70,6 +70,7 @@ class ImageWsPublisher:
         self.client = MqttWebsocketClient(server, port)
 
     def publishImage(self, image):
+        print('Sending image to channel: {}/image'.format(self.name))
         self.client.message('{}/image'.format(self.name), base64.b64encode(image))
 
 class TimedImagePublisher:

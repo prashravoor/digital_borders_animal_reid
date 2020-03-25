@@ -98,8 +98,8 @@ class Tracker:
 
     def _getDirections(self, x1, y1, x2, y2, a1, a2):
         # Set a small buffer for movement, so that tracklets are not too fine
-        buffer = 2.0 # 2 pixel buffer
-        area_buffer = 1.05 # 5%
+        buffer = 12.0 # 5 pixel buffer. For 300,300 image, approx 2%
+        area_buffer = 1.10 # 5%
         xdir = ydir = zdir = 's'
 
         if x2 > x1 and (x2 - x1) > buffer:
