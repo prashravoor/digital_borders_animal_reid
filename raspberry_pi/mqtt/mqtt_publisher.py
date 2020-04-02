@@ -75,7 +75,7 @@ class ImageWsPublisher:
 
 class TimedImagePublisher:
     def __init__(self, client, timeout=10):
-        self.timeout = 10
+        self.timeout = timeout
         self.client = client
         self.lastSentTime = 0
 

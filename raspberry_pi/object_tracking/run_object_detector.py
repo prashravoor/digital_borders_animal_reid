@@ -69,6 +69,7 @@ if __name__ == '__main__':
     print('Registered with MQTT server, publishing messages on channel: {}'.format(DEVICE_NAME))
 
     with picamera.PiCamera(resolution=(640,480), framerate=30) as camera:
+        #camera.start_recording('my_video.h264')
         with picamera.array.PiRGBArray(camera) as stream:
             camera.start_preview()
             time.sleep(2) # Camera warmup
@@ -83,8 +84,8 @@ if __name__ == '__main__':
                         # publisher.publishDetection(results)
                         sendImageAsync(imagePublisher, image, results)
 
+                print('Got results: {}, Time: {:.4f}s'.format(results, time.time() - start))
                 if display:
-                    print('Got results: {}, Time: {:.4f}s'.format(results, time.time() - start))
                     image = cv2.resize(image, 
                             (detector.IMG_HEIGHT, detector.IMG_WIDTH))
                     if len(results) > 0:

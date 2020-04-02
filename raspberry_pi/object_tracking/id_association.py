@@ -30,7 +30,7 @@ class IdAssociator:
         self.featureDb = featureDb
         self.perDeviceDetHistory = dict()
         #self.SIMILARITY_THRESH = 45.0
-        self.SIMILARITY_THRESH = 15000.0
+        self.SIMILARITY_THRESH = 200000.0
         self.devDetMap = dict()
 
 
@@ -50,9 +50,9 @@ class IdAssociator:
         knownIds = set([x[1] for x in knownFeatures])
         knownVectors = np.array([x[0] for x in knownFeatures])
         distMat = euclidean_distances(vectors, knownVectors)
-        print(distMat)
         identities = []
-        for vec in distMat:
+        for i in range(len(vectors)):
+            vec = distMat[i] 
             if np.min(vec) > self.SIMILARITY_THRESH:
                 # Return new id
                 identities.append(len(knownIds))
@@ -70,11 +70,12 @@ class IdAssociator:
                         continue
                     identities.append(newid) # Corresponding identity is assigned
                     added = True
+                    break
 
                 if not added:
                     identities.append(self.generateNewId(classid)) # New identity is assigned
 
-        assert len(identities) == len(vectors)
+        assert len(identities) == len(vectors), 'Identites: {} != Vectors: {}'.format(identities, len(vectors))
         return identities
 
     def update(self, devName, image, detections):

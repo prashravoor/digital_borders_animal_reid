@@ -84,6 +84,7 @@ export class AppComponent implements OnInit, OnDestroy {
               device.backgroundColor = 'green';
             } else if (jsMsg.deterState == 'failed') {
               device.backgroundColor = 'red';
+            } else if (jsMsg.deterState == 'same') {
             }
           } else {
             device.backgroundColor = "white";

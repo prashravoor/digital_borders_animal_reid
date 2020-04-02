@@ -72,18 +72,18 @@ class SubjectMonitor:
 class CrossCameraMonitor:
     def __init__(self, feClient, idAssociator, timeout=3000):
         self.registered = dict()
-        self.DETER_STATES = {0: 'None', 1: 'alert', 2: 'success', 3: 'failed'}
+        self.DETER_STATES = {0: 'None', 1: 'alert', 2: 'success', 3: 'failed', 4: 'same'}
         self.feClient = feClient
         self.timeout = timeout
         self.inCounter = defaultdict(int)
         self.outCounter = defaultdict(int)
-        self.DETER_TIMEOUT = 3
-        self.AREA_THRESH = 0.4 * (300 * 300) # Covers 50% of the image
-        self.COUNT_THRESH = 2 # 2 continous frames to confirm movement direction
+        self.DETER_TIMEOUT = 5
+        self.AREA_THRESH = 0.3 * (300 * 300) # Covers 50% of the image
+        self.COUNT_THRESH = 3 # 2 continous frames to confirm movement direction
         self.staticMap = defaultdict(bool)
         self.wasAlerted = defaultdict(bool)
         self.idAssociator = idAssociator
-        self.detHistoryTimeout = 10 # 10 seconds
+        self.detHistoryTimeout = 1 # 10 seconds
         self.lock = threading.Lock()
         self.imagePublishers = dict()
         self.threadMap = dict()
@@ -91,7 +91,8 @@ class CrossCameraMonitor:
         self.activeDetectionLock = threading.Lock() 
         self.threadid = 0
         self.threadMapLock = threading.Lock()
-        self.ACTIVE_DET_TIMEOUT = 5
+        self.ACTIVE_DET_TIMEOUT = 3
+        self.prev_deterState = 0
 
 
         th = threading.Timer(self.detHistoryTimeout, self.sendDetectionHistory, [])
@@ -112,7 +113,7 @@ class CrossCameraMonitor:
             self.registered[name] = SubjectMonitor(self.idAssociator, self.timeout)
             self.imagePublishers[name] = TimedImagePublisher(
                     ImageWsPublisher('{}/{}'.format(MQTT_FRONTEND_BASE, name),
-                                      self.feClient.server, self.feClient.port))
+                                      self.feClient.server, self.feClient.port), 0.001)
             # Send message to frontend
             self.feClient.message(MQTT_FRONTEND_REG, name)
 
@@ -154,7 +155,9 @@ class CrossCameraMonitor:
             else:
                 self.staticMap[idf] = True
 
-            if self.inCounter[idf] > self.COUNT_THRESH or Tracker([])._getBboxArea(detection.bounding_box) > self.AREA_THRESH:
+            area = Tracker([])._getBboxArea(detection.bounding_box)
+            if self.inCounter[idf] > self.COUNT_THRESH or self.wasAlerted[idf]:
+            #if area > self.AREA_THRESH:
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
@@ -173,10 +176,13 @@ class CrossCameraMonitor:
                 print('Been replaced by another thread...')
                 return # Replaced by another thread
             del self.threadMap[idf]
-
+        else:
+            print('Device not in map, exiting...')
+            self.threadMapLock.release()
+            return
         self.threadMapLock.release()
 
-        if self.inCounter[idf] > 0 and not self.staticMap[idf]:
+        if self.inCounter[idf] > 1 and not self.staticMap[idf]:
             print()
             print('!!!!!!!!!!!!!!!!')
             print('Deterring animal {} failed, sending SMS'.format(idf))
@@ -197,17 +203,17 @@ class CrossCameraMonitor:
                 th.start()
             self.threadMapLock.release()
             self.sendFeDetectionMessage(name, 1, 'alert')
-        elif self.outCounter[idf] > 0: 
+        elif self.outCounter[idf] > 1: 
             print()
             print('Animal {} successfully deterred...'.format(idf))
             print()
-            self.sendFeDetectionMessage(name, 0, 'success')
+            self.sendFeDetectionMessage(name, 1, 'success')
             self.outCounter[idf] = 0
         else:
             print()
             print('Resetting to normal...')
             print()
-            self.sendFeDetectionMessage(name, 0, 'None')
+            #self.sendFeDetectionMessage(name, 0, 'None')
 
     def sendNoActiveDetectionsMessage(self, name):
         self.activeDetectionLock.acquire()
