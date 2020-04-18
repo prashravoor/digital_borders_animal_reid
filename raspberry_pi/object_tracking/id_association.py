@@ -53,16 +53,17 @@ class IdAssociator:
         knownVectors = np.array([x[0] for x in knownFeatures])
         distMat = euclidean_distances(vectors, knownVectors)
         identities = []
+        # Group features by id and count number of vectors per id
         countmap = defaultdict(int)
+
         for f in knownFeatures:
             countmap[f[1]] += 1
         minNumSamples = min([v for _,v in countmap.items()])
 
         for i in range(len(vectors)):
             vec = distMat[i] 
-            print(np.min(vec), np.max(vec))
-            print(minNumSamples)
-            if np.min(vec) > self.SIMILARITY_THRESH and minNumSamples > 3:
+            print(np.min(vec))
+            if np.min(vec) > self.SIMILARITY_THRESH and minNumSamples > 3: # At least 3 features per id
                 # Return new id
                 identities.append(len(knownIds))
             else:

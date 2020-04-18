@@ -11,6 +11,7 @@ import time
 import argparse
 
 '''
+args = sys.argv
 if not len(args) == 3:
     print('Usage: {} <Model path> <Folder to test>'.format(args[0]))
     exit(1)
@@ -23,7 +24,8 @@ def find_acc(modelPath, folder, numImages, numIds, minSamplesPerId, samplesPerId
 # Load SVM model
     svm_model,pca_model,trained_ids = load(modelPath)
 
-    imageList = [x for x in os.listdir(folder + '/test') if x.endswith('.jpg')]
+    #imageList = [x for x in os.listdir(folder + '/test') if x.endswith('.jpg')]
+    imageList = [x for x in os.listdir(folder) if x.endswith('.jpg')]
 
 # Load Ids
     id_map = {}
@@ -72,7 +74,8 @@ def find_acc(modelPath, folder, numImages, numIds, minSamplesPerId, samplesPerId
 
     imageList = []
     for item in rev_map:
-        imageList.extend([os.path.join(folder + '/test', x) for x in item[1]])
+        #imageList.extend([os.path.join(folder + '/test', x) for x in item[1]])
+        imageList.extend([os.path.join(folder, x) for x in item[1]])
     np.random.shuffle(imageList)
 
     print('Proceeding with {} Identities, covering {} images overall'.format(len(rev_map), len(imageList)))
@@ -157,9 +160,9 @@ if '__main__' == __name__:
     correct,count,times = find_acc(modelPath,folder,numImages,numIds,minSamplesPerId,samplesPerId, det)
 
     print('---- Results -----')
-    #if count > 0:
-    #    print('Correct: {}, Accuracy over {} images: {:.3f}'.format(correct, count, correct/count))
-    #    print('Average Identification time taken per image: {:.3f}s'.format(times/count))
+    if count > 0:
+        print('Correct: {}, Accuracy over {} images: {:.3f}'.format(correct, count, correct/count))
+        print('Average Identification time taken per image: {:.3f}s'.format(times/count))
 
     '''
     with open('{}_{}_{}_{}_stats.csv'.format(dsName, modelName, numIds, samplesPerId), 'w') as f:

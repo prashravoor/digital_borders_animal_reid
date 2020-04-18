@@ -14,9 +14,9 @@ class ObjectDetector:
         self.INPUT_HEIGHT = image_height
         self.model = None
         self.MAX_BOXES_PER_IMAGE = 100
-        self.IOU_THRESHOLD = 0.5
+        self.IOU_THRESHOLD = 0.45
         #self.SCORE_THRESHOLD = 0.1
-        self.SCORE_THRESHOLD = 0.4
+        self.SCORE_THRESHOLD = 0.45
 
     def loadModel(self):
         self.model = tf.saved_model.load(self.model_path, tags=None)
@@ -107,17 +107,18 @@ class ObjectDetector:
                                      for x in range(len(indices))])
 
 
-        return detectionResults
+        return list(zip(detectionResults, images))
 
 if '__main__' == __name__:
     import sys
     import time
     import matplotlib.pyplot as plt
     from im_utils import drawBoundingBoxWithLabel
+    import os
 
     args = sys.argv
-    if not len(args) == 2:
-        print('Usage: {} <image file>'.format(args[0]))
+    if not len(args) == 3:
+        print('Usage: {} <model> <image file>'.format(args[0]))
         exit(1)
 
     def loadLabels(file):
@@ -132,21 +133,44 @@ if '__main__' == __name__:
         return mapping
 
     print('Loading Model...')
-    det = ObjectDetector('ssd/saved_model')
+    det = ObjectDetector(args[1])
     det.loadModel()
-
-    print('Reading Image...')
-    image = cv2.imread(args[1])
-
-    print('Running inference...')
-    result = det.getBoundingBoxes(image)
-    print('Found {} boxes: {}'.format(len(result), result))
-
     print('Loading Labels...')
-    labels = loadLabels('ssd/label_mapping.csv')
 
-    print('Drawing bounding boxes on image...')
-    for res in result:
-        image = drawBoundingBoxWithLabel(image, res, labels)
-        plt.imshow(image)
-    plt.show()
+    labels = loadLabels('ssd/label_mapping.csv')
+    labels[1] = 'Jaguar'
+    labels[2] = 'Elephant'
+    labels[3] = 'Tiger'
+
+
+    fil = args[2]
+    with open(fil) as f:
+        files = [x.strip() for x in f.readlines()]
+
+    for file in files:
+        print('Reading Image...')
+        #image = cv2.imread(args[2])
+        image = cv2.imread(file)
+        image = cv2.resize(image, (det.INPUT_WIDTH, det.INPUT_HEIGHT))
+        det.getBoundingBoxes(image)
+
+        print('Running inference...')
+        st = time.time()
+        result,_ = det.getBoundingBoxes(image)
+        #print('Found {} boxes: {}, Time: {:.4f}s'.format(len(result), result, time.time() - st))
+
+        print('Drawing bounding boxes on image...')
+        for res in result:
+            image = drawBoundingBoxWithLabel(image, res, labels)
+            #plt.imshow(image)
+
+        filename = os.path.basename(file).split('.')[0]
+        pref = 'jag'
+        if 'amur' in file.lower():
+            pref = 'amur'
+        elif 'elp' in file.lower():
+            pref = 'elp'
+
+        filename = '{}_{}_ssd.jpg'.format(pref, filename)
+        cv2.imwrite(os.path.join('screens', filename), image, [cv2.IMWRITE_JPEG_QUALITY, 50])
+    #plt.show()

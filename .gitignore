@@ -133,3 +133,11 @@ fpn_*
 quantized_*
 ssd_*
 results_*
+
+possible_junk/
+*_bin
+inteltf
+screens
+snapshots_videos
+trained_models
+video_clips
