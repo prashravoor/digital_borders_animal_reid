@@ -25,11 +25,11 @@ def covert_pb_saved_model(graph_def, export_dir, input_name='input', output_name
         tf.import_graph_def(graph_def, name="")
         g = tf.get_default_graph()
         inp = g.get_tensor_by_name(input_name)
-        out = g.get_tensor_by_name(output_name)
+        out = [g.get_tensor_by_name(x) for x in output_name]
 
         sigs[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY] = \
             tf.saved_model.signature_def_utils.predict_signature_def(
-                {"input": inp}, {"output": out})
+                {"input": inp}, {output_name[x] : out[x] for x in range(len(output_name))})
 
         builder.add_meta_graph_and_variables(sess,
                                              [tag_constants.SERVING],
@@ -43,4 +43,4 @@ if not len(sys.argv) == 3:
     print('Usage: <input graph> <output dir>')
     exit()
 
-convert_pb_to_server_model(sys.argv[1], sys.argv[2])
+convert_pb_to_server_model(sys.argv[1], sys.argv[2], 'image_tensor:0', ['detection_boxes:0', 'detection_scores:0', 'detection_classes:0', 'num_detections:0'])
