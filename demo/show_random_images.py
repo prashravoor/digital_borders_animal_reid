@@ -6,11 +6,6 @@ import matplotlib.gridspec as gridspec
 
 
 NUM_IMAGES = 16
-amur = 'amur/plain_reid_train/train'
-elp = 'ELPephants/images'
-amur_det = 'amur/detection_train/trainval'
-jaguar = 'jaguars/reid'
-jaguar_det = 'jaguars/'
 new_size = (416,416)
 
 def loadLabels(folder):
@@ -28,7 +23,7 @@ def loadLabels(folder):
             result['{}/{}'.format(folder, parts[1])] = parts[0]
     else:
         file = '{}/{}'.format(folder, '../class_mapping.txt')
-        names = [x for x in os.listdir(elp) if x.endswith('.jpg')]
+        names = [x for x in os.listdir(folder) if x.endswith('.jpg')]
         temp = {}
         with open(file) as f:
             lines = [x.strip() for x in f.readlines()]
@@ -101,14 +96,17 @@ def showSubjectImages(folder, numImages):
 
 
 if __name__ == '__main__':
-    showImagesInFolder(elp, NUM_IMAGES)
-    showImagesInFolder(amur, NUM_IMAGES)
-    showImagesInFolder(amur_det, NUM_IMAGES)
-    showImagesInFolder(jaguar, NUM_IMAGES)
-    showImagesInFolder(jaguar_det, NUM_IMAGES)
+    import sys
 
-    SUB_IMAGES = 9
-    showSubjectImages(amur, SUB_IMAGES)
-    showSubjectImages(elp, SUB_IMAGES)
-    showSubjectImages(jaguar, SUB_IMAGES)
+    args = sys.argv
+
+    if len(args) < 2:
+        print('Specify at least one image directory')
+        exit()
+
+    directories = args[1:]
+
+    for directory in directories:
+        showImagesInFolder(directory, NUM_IMAGES)
+
     plt.show()

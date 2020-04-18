@@ -144,8 +144,10 @@ if '__main__' == __name__:
 
 
     fil = args[2]
-    with open(fil) as f:
-        files = [x.strip() for x in f.readlines()]
+    files = [fil]
+
+    #with open(fil) as f:
+    #    files = [x.strip() for x in f.readlines()]
 
     for file in files:
         print('Reading Image...')
@@ -156,13 +158,13 @@ if '__main__' == __name__:
 
         print('Running inference...')
         st = time.time()
-        result,_ = det.getBoundingBoxes(image)
-        #print('Found {} boxes: {}, Time: {:.4f}s'.format(len(result), result, time.time() - st))
+        result,image = det.getBoundingBoxes(image)
+        print('Found {} boxes: {}, Time: {:.4f}s'.format(len(result), result, time.time() - st))
 
         print('Drawing bounding boxes on image...')
         for res in result:
             image = drawBoundingBoxWithLabel(image, res, labels)
-            #plt.imshow(image)
+            plt.imshow(image)
 
         filename = os.path.basename(file).split('.')[0]
         pref = 'jag'
@@ -172,5 +174,5 @@ if '__main__' == __name__:
             pref = 'elp'
 
         filename = '{}_{}_ssd.jpg'.format(pref, filename)
-        cv2.imwrite(os.path.join('screens', filename), image, [cv2.IMWRITE_JPEG_QUALITY, 50])
-    #plt.show()
+        #cv2.imwrite(os.path.join('screens', filename), image, [cv2.IMWRITE_JPEG_QUALITY, 50])
+    plt.show()

@@ -23,11 +23,11 @@ class SvmIdentifier:
         self.dsName = os.path.basename(parts[0])
 
         if self.dsName == 'amur':
-            self.expected_ids = [388, 446, 242, 413] #388 is the only correct one 
+            self.expected_ids = [3] #388 is the only correct one 
         elif self.dsName == 'elp' or self.dsName == 'elpfaces':
-            self.expected_ids = [448]
+            self.expected_ids = [2]
         else:
-            self.expected_ids = [275, 451, 458]
+            self.expected_ids = [1]
  
         self.modelName = parts[1]
         if self.modelName == 'alexnet':
@@ -55,7 +55,7 @@ class SvmIdentifier:
         if image is None:
             return None
 
-        results = self.objDetector.getBoundingBoxes(image)
+        results,_ = self.objDetector.getBoundingBoxes(image)
         detections = []
         for result in results:
             bbox = result.bounding_box
@@ -65,7 +65,7 @@ class SvmIdentifier:
 
             detections.append(DetectionResult(bbox, result.classid, det_id))
 
-        if len(detections) == 0:
+        if not len(detections) == 1:
             # Use whole image
             bbox = BoundingBox(0,0,image.shape[1],image.shape[0])
             det_id = self.getIdFromBoundingBox(image, bbox)
@@ -85,7 +85,7 @@ class SvmIdentifier:
 
     def predictId(self, imageFile):
         # feature = extractFeaturesForImage(self.classifier, self.modelName, [self.layer], imageFile, self.objDetector)[0]
-        return self.predictIdsFromImage(cv2.imread(imageFile))
+        return self.predictIdsFromImage(cv2.imread(imageFile))[0].identifier
 
     def predictIdForFeature(self, feature):
         feature = normalize_activations(feature)
@@ -104,12 +104,13 @@ class SvmIdentifier:
 
 if __name__ == '__main__':
     args = sys.argv
-    if len(args) < 3:
-        print('Usage: {} <Model Path> <image folder> [id to use]'.format(args[0]))
+    if len(args) < 4:
+        print('Usage: {} <SVM Model Path> <Object detector model path> <image folder> [id to use]'.format(args[0]))
         exit(1)
 
     modelPath = args[1]
-    folder = args[2]
+    folder = args[3]
+    objdetmodel = args[2]
 
     existingImages = [x for x in os.listdir(folder) if x.endswith('.jpg')]
     with open('{}/normalized_class_mapping.txt'.format(folder)) as f:
@@ -118,8 +119,8 @@ if __name__ == '__main__':
     minId,maxId = min([x[1] for x in id_map]), max([x[1] for x in id_map])
 
     idNum = None
-    if len(args) >= 4:
-        idNum = int(args[3])
+    if len(args) > 4:
+        idNum = int(args[4])
 
     rev_map = {}
     for x in id_map:
@@ -129,7 +130,8 @@ if __name__ == '__main__':
 
 
     print('Loading Object Detector')
-    det = ObjectDetector('ssd/saved_model')
+    det = ObjectDetector(objdetmodel)
+    det.SCORE_THRESHOLD = 0.7
     det.loadModel()
     # Warming up
     det.getBoundingBoxes(readImageFromFile(os.path.join(folder, rev_map[0][0])))

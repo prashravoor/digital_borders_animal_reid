@@ -9,14 +9,13 @@ Install all needed requirements for installation:
 Follow all instructions to install YOLO from [here](https://pjreddie.com/darknet/yolo/). <br>
 Compiling the source code is optional. However, the network configuration and weights are needed. <br>
 
-## Running the code
-In the `extract_bb.py`, edit the default arguments as necessary for the **network configuration file**, **weights file** and **classes file**. <br>
-Run the code on an image through: `python extract_bb.py -i <Path to Image File>` <br>
-
 ### Running with MobileNetV2-SSD
-Download the model file from [here](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_oid_v4_2018_12_12.tar.gz) ([source](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md)) and save them under the ssd folder. You can then run the `animal_detection.py` and the `mobilenet_ssd.ipynb` files using the saved model.
+Download the model file from [here](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_oid_v4_2018_12_12.tar.gz) ([source](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md)) and save them under the ssd folder. You can then run the `demo/object_detection.py` and the `notebooks/ObjectDetection.ipynb` files using the saved model.
 
-## Feature Extraction and SVM Regression
+## Training Object Detection Model
+See details for Object Detection and Re-Id training for `reid-strong-baseline` under the datasets folder <br>
+
+## Training -- Feature Extractors using Truncated DCNNs
 In order to test the feature extraction and clustering using SVM, the following are required: <br>
 * MongoDB - Install using `sudo apt install mongod`
 * pymongo - Install using `python -m pip install pymongo`
@@ -33,18 +32,21 @@ In order to test the feature extraction and clustering using SVM, the following 
 <br>
 
 ### Setting up the data
+Details on how to acquire various datasets are provided under the `datasets` folder. <br>
 Store all the images into an appropriate folder. The folder needs to have a file called `class_mapping.txt`, which contains the image file name and the class label as follows: <br>
 `Image File Prefix  Individual Id` <br>
 The file for `ELPephants` contains this information as requried, but the AMUR dataset does not. <br>
 Generate the file for AMUR as needed, and put int under the data folder. <br>
-A sample image dataset is provided under `amur_small` <br>
+A sample image dataset is provided under `sample_images/amur_small` <br>
 
 ### Running the code
 The Jupyter-Notebook file is added for quick tests. Otherwise, the python program can be run as: <br>
-`python extract_features_and_store_to_mongo.py amur_small` <br>
-Replace **amur_small** with the path to the correct image dataset as needed <br>
+`python train/truncated_dcnns/find_best_svm_model.py models_bin/ssd/saved_model/ sample_images/amur_small/` <br>
+Replace **amur_small** with the path to the correct image dataset(s) as needed <br> **This could take several hours to complete.** <br>
 By default, the program will evaluate all the datasets provided, under all three models specified, and save the output of each layer of the network into the DB <br>
-
+The best models are saved to the `svm_models_trained` folder. <br>
+The demo for one of the completed models can be performed using the `svm_identifier.py` script. For example: <br>
+`python demo/svm_identifier.py svm_models_trained/<model> models_bin/ssd/saved_model <image folder>` <br>
 
 ### Partitioning images for Train and Test during Re-Identification training
 Since open-set identification is being tested, it is required to remove some of the known ids and train the SVM using the reamining ids. <br>
@@ -56,49 +58,63 @@ The SVM can then be trained using the `train` subset, and their generalization a
 <br>
 <br>
 For the ELP dataset, the train and validation splits are already provided under `train.txt` and `val.txt`. These are directly used to partition the dataset. <br>
-
-# Raspberry Pi Code
-## Setup
-The official TFLite provided by Google is rather slow. Install the alternative compiled version provided by PINTO as mentioned in the corresponding readme
-Install MQTT using `python3 -m pip install mqtt` <br>
-On a laptop / desktop, setup the MQTT broker service using `sudo apt install mosquitto` <br>
-Provide values for the MQTT server in the Raspberry Pi code files, and run the program <br>
-Before running any of the MQTT programs, setup the PYTHONPATH correctly using `export PYTHONPATH=$PYTHONPATH:<Repo base dir>` <br>
-
-## Tracking
-Run the subscriber program on the laptop using `python3 raspberry_pi/mqtt/subscriber.py` to start the listening service for the tracking
+To perform this split, run the `utils/create_open_reid_splits.py` script on the desired folder.<br>
+More details on how to format the data suitable for training with `reid-strong-baseline` can be found under the `datasets` folder. <br>
 
 # Identification Pipeline with Triplet loss
-## Setup
-Install the following required packages for using the Identification pipeline by running `python3 -m pip install -r triplet_loss_req.txt` <br>
-
-## Testing model accuracy
-Once the model has been trained (using the open-reid strong baseline repo), copy the model and convert it to an ONNX model using <br>
-`bash convert_torch_to_onnx.sh <input model path> <output model path>` <br>
-Conversion to ONNX is required since PyTorch on CPU is extremely slow. <br>
-Run the code to test feature extraction accuracy and show the TSNE graphs using `python3 test_triplet_loss.py <image folder> <ONNX model path>`
 
 ## Training Using Re-id Strong Baseline
 Download the Open-Reid code base from [here] (https://github.com/Cysu/open-reid.git) <br>
-Apply the changes as required using the patch files stored in `patches/open_reid` folder <br>
+Apply the changes as required using the patch files stored in `patches` folder <br>
 Download the Re-id strong baseline code from [here](https://github.com/michuanhaohao/reid-strong-baseline.git) <br>
-Apply the changes as required using the patch files stored in `patches/reid_strong_baseline` folder <br>
+Apply the changes as required using the patch files stored in `patches` folder <br>
 
 ### Prepare the dataset
 Multiple scripts are needed to be run before the dataset can be used for reid-strong baseline. All required scripts are listed below. Run them in the same order. The sample assumes images are stored in a folder named `ELPephants\reid_faces`. The metdatafile `class_mapping.txt` which contains each file to class id mapping is required to be present in the same folder<br>
 ```bash
-python3 create_open_reid_splits.py ELPephants\reid_faces ELPephants\faces_open_reid # Creates two folders, train and test
-python3 rename_images_to_int_names.py ELPephants\faces_open_reid\train # Renames all files to integer names as needed by Open Re-id
-python3 remap_labels_contiguous.py ELPephants\faces_open_reid\train # If there are any missing identities, replace them with continuous ids
+python3 create_open_reid_splits.py ELPephants/reid_faces ELPephants/faces_open_reid # Creates two folders, train and test inside `faces_open_reid`
+python3 rename_images_to_int_names.py ELPephants/faces_open_reid/train # Renames all files to integer names as needed by Open Re-id
+python3 remap_labels_contiguous.py ELPephants/faces_open_reid/train # If there are any missing identities, replace them with continuous ids
 # Move to Open Reid code base, and start the run and stop it once the datasets are created. It creates the images, splits.json and meta.json files
 # ...
-python3 partition_ds_for_open_reid.py ..\open_reid\amur_data\elp ..\reid-strong-baseline\data\elp # Optional split number between [0,10] can also be specified
+python3 partition_ds_for_open_reid.py ../open_reid/amur_data/elp ../reid-strong-baseline/data/elp # Optional split number between [0,10] can also be specified
 ```
 
 ### Training
 From the reid-strong-baseline folder, run the appropriate training file by specifying the requried config file <br>
-For example: `train.bat softmax_triplet_with_center_elp.yml`
+For example: `train.bat softmax_triplet_with_center_elp.yml` <br>
+Configurations are included in the `datasets/reid/configs` folder. <br>
+
 
 ### Testing
 Once the training is completed, test the performance over the test data <br>
-`python3 test_model_reid.py ..\reid-strong-baseline\elp_test\resnet50_model_100.pth ELPephants\faces_open_reid\test ..\reid-strong-baseline\configs\elp_softmax_triplet_with_center.yml
+Set the PYTHONPATH to the `reid-strong-baseline` folder through: `export PYTHONPATH=$PYTHONPATH:<path to reid strong baseline folder>` <br>
+`python3 test/test_triplet_loss.py ../reid-strong-baseline/elp_test/resnet50_model_100.pth ELPephants/faces_open_reid/test` <br>
+Additionally, Closed and Open set accuracy can be tested using `test/calc_closed_set_acc.py` and `test/calc_open_set_acc.py` scripts <br>
+
+### Object Tracking Demo
+Once the model has been trained using `reid-strong-baseline`, it first needs to be converted to Keras. This can be done using `python utils/convert_torch_to_keras.py <torch model> <output keras model name>`. The converted model can then be provided to the Object Tracker for re-identification <br>
+
+A demo can be run over a video too, by running `python demo/video_demo.py <Object Detection Model> <Re-ID model (keras)> <video path>`. <br>
+
+# Live Demo
+On both the laptop and the raspberry pi, run `source setenv.sh` from the base folder of the repo to setup required PYTHONPATHs <br>
+
+## Tracking
+Run the subscriber program on the laptop using `python3 central_server/start_server.py <Re-Id model>` to start the listening service for the tracking <br>
+
+## Frontend server
+Once the MQTT broker service is up and running, as is the central server code, the frontend can be started using Angular CLI. For installation instructions, refer to the README file under `frontend/monitoring_server`. <br>
+Once Node JS and Angular (version 9) are installed, set the IP address for the MQTT broker in the `app.module.ts` file. Start the frontend through: <br>
+```bash
+cd frontend/monitoring_server
+ng serve --host 0.0.0.0
+```
+
+## Raspberry Pi 
+The official TFLite provided by Google is rather slow. Install the alternative compiled version provided by PINTO as mentioned in the corresponding readme under the `raspberry_pi` folder. <br>
+Install MQTT using `python3 -m pip install mqtt` <br>
+On a laptop / desktop, setup the MQTT broker service using `sudo apt install mosquitto` <br>
+Provide values for the MQTT server in the Raspberry Pi code files, and run the program <br>
+`python raspberry_pi/run_object_detector.py <Object detection model (tflite)> <MQTT broker IP> [display - optional]` <br>
+

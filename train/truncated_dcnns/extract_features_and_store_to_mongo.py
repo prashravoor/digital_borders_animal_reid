@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 from db_interface import DbRecord,DbInterface
-from object_detection import ObjectDetector
+from demo.object_detection import ObjectDetector
 
 def initializeDB(client, dbName):
     cursor = client.getDB(dbName)
@@ -42,14 +42,14 @@ def extractFeaturesForImage(net, modelName, layerNames, imageFile, detector):
     if 'googlenet' == modelName:
         inputSize = (224,224)
     elif 'resnet50' == modelName:
-        inputSize = (224,224)
+        inputSize = (256,256)
     
     image = readImageFromFile(imageFile)
     if image is None:
         print('Invalid imageFile: {}'.format(imageFile))
         exit(1)
 
-    bounding_boxes = detector.getBoundingBoxes(image)
+    bounding_boxes,_ = detector.getBoundingBoxes(image)
     if len(bounding_boxes) == 1:
         box = bounding_boxes[0].bounding_box
         image = image[box.ymin:box.ymax, box.xmin:box.xmax,:]
@@ -114,7 +114,7 @@ def randomized_samples(path, keyfile='normalized_class_mapping.txt', max_files=6
     id_map = [x for x in id_map if os.path.exists(os.path.join(path,x[0]))]
 
     if len(id_map) < max_files:
-        return [x[0] for x in id_map]
+        return [os.path.join(path, x[0]) for x in id_map]
 
     reverse_map = {}
     for i in id_map:
@@ -195,11 +195,11 @@ def run_job(path, det, modelsDict, modelNames):
 
 
 def extractFeaturesForImages(modelNames, args):
-    if len(args) < 1:
-        print('At least 1 images folder required')
+    if len(args) < 2:
+        print('Usage: cmd <Object detection model path> <images folder> [max images]')
         return
 
-    imageFolders = args
+    imageFolders = args[1:]
     n = 5000
     if len(args) >= 2:
         try:
@@ -214,18 +214,17 @@ def extractFeaturesForImages(modelNames, args):
         print('Loaded Model {}'.format(model))
 
     print('Loading object Detection model...')
-    det = ObjectDetector('ssd/saved_model')
+    det = ObjectDetector(args[0])
     det.loadModel()
     print('Warming up object detector...')
-    det.getBoundingBoxes(cv2.imread('amur_small/002019.jpg'))
-    det.getBoundingBoxes(cv2.imread('amur_small/002019.jpg'))
+    #det.getBoundingBoxes(cv2.imread('amur_small/002019.jpg'))
+    #det.getBoundingBoxes(cv2.imread('amur_small/002019.jpg'))
 
     for i in range(len(imageFolders)):
         print('Starting Feature Extraction for folder {}'.format(imageFolders[i]))
         run_job(imageFolders[i], det, modelsDict, modelNames)
 
 if __name__ == '__main__':
-    # modelNames = ['alexnet', 'googlenet', 'resnet50']
-    modelNames = ['googlenet']
+    modelNames = ['alexnet', 'googlenet', 'resnet50']
     extractFeaturesForImages(modelNames, sys.argv[1:])
 

@@ -4,8 +4,8 @@ import sys
 import os
 
 args = sys.argv
-if len(args) < 2:
-    print('At least 1 image folder required')
+if len(args) < 3:
+    print('Usage: cmd <Object Detector> <Folder name 1> <Folder name 2> ... [max images]')
     exit(1)
 
 saved_models = 'svm_models_trained'

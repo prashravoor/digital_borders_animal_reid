@@ -170,7 +170,7 @@ x_train_names, y_train, x_val_names, y_val = loadData(infolder)
 num_classes = len(set(y_train))
 
 model = build_model(cfg, num_classes)
-model.load_param('../reid-strong-baseline/elp_test/densenet_model_120.pth')
+model.load_param(modelpath)
 model = nn.DataParallel(model)
 model = model.to('cuda')
 model.eval()
