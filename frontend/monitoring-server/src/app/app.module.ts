@@ -18,7 +18,7 @@ import { AppComponent } from './app.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
 export const MQTT_SERVICE_OPTIONS: IMqttServiceOptions = {
-  hostname: 'localhost',
+  hostname: '192.168.0.104',
   port: 9001,
   path: ''
 };

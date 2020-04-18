@@ -28,7 +28,8 @@ MQTT_FRONTEND_BASE = 'frontend'
 MQTT_FRONTEND_REG = '{}/registration'.format(MQTT_FRONTEND_BASE)
 MQTT_FRONTEND_DET_HISTORY = '{}/detectionHistory'.format(MQTT_FRONTEND_BASE)
 
-LABELS = {0: 'Human', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
+#LABELS = {0: 'Human', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
+LABELS = {0: 'Human', 1: 'Human', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
 
 class SubjectMonitor:
     def __init__(self, idAssociator, timeout=3000):
@@ -55,7 +56,8 @@ class SubjectMonitor:
 
     def getLatestTracklet(self, idf):
         if idf in self.detections and len(self.detections[idf].tracker.tracklets) > 0:
-            return self.detections[idf].tracker.tracklets[-1]
+            #return self.detections[idf].tracker.tracklets[-1]
+            return self.detections[idf].tracker.getTracklets()[-1]
         return None
 
     def getActiveDetections(self):
@@ -79,7 +81,7 @@ class CrossCameraMonitor:
         self.outCounter = defaultdict(int)
         self.DETER_TIMEOUT = 5
         self.AREA_THRESH = 0.3 * (300 * 300) # Covers 50% of the image
-        self.COUNT_THRESH = 3 # 2 continous frames to confirm movement direction
+        self.COUNT_THRESH = 6 # 2 continous frames to confirm movement direction
         self.staticMap = defaultdict(bool)
         self.wasAlerted = defaultdict(bool)
         self.idAssociator = idAssociator
@@ -124,6 +126,7 @@ class CrossCameraMonitor:
             if track is None:
                 return deterState
 
+            area = Tracker([])._getBboxArea(detection.bounding_box)
             if track.zdir == 'i':
                 self.inCounter[idf] += 1
                 self.outCounter[idf] = 0
@@ -147,7 +150,9 @@ class CrossCameraMonitor:
 
             elif track.zdir == 'o':
                 self.outCounter[idf] += 1
-                self.inCounter[idf] = 0 
+                self.inCounter[idf] = 0
+                #if self.wasAlerted[idf] and (self.outCounter[idf] > self.COUNT_THRESH and area < self.AREA_THRESH/2):
+                #if self.wasAlerted[idf] and self.outCounter[idf] > self.COUNT_THRESH and area < self.AREA_THRESH/2):
                 if self.wasAlerted[idf] and self.outCounter[idf] > self.COUNT_THRESH:
                     deterState = 2
                 self.staticMap[idf] = False
@@ -155,8 +160,8 @@ class CrossCameraMonitor:
             else:
                 self.staticMap[idf] = True
 
-            area = Tracker([])._getBboxArea(detection.bounding_box)
             if self.inCounter[idf] > self.COUNT_THRESH or self.wasAlerted[idf]:
+            #if self.inCounter[idf] > self.COUNT_THRESH and area > self.AREA_THRESH:
             #if area > self.AREA_THRESH:
                 print('Glowing LEDS!')
                 print('Glowing LEDS!')
@@ -190,7 +195,9 @@ class CrossCameraMonitor:
             print()
             self.sendFeDetectionMessage(name, 1, 'failed')
             self.inCounter[idf] = 0
-        elif self.staticMap[idf]:
+            #self.wasAlerted[idf] = False
+        elif self.inCounter[idf] > 0 and self.staticMap[idf]:
+        #elif self.staticMap[idf]:
             print()
             print('Watching animal {} for some more time...'.format(idf))
             print()
@@ -202,13 +209,16 @@ class CrossCameraMonitor:
                 th.setDaemon(True)
                 th.start()
             self.threadMapLock.release()
-            self.sendFeDetectionMessage(name, 1, 'alert')
-        elif self.outCounter[idf] > 1: 
+            #self.sendFeDetectionMessage(name, 1, 'alert')
+            #self.wasAlerted[idf] = True
+        #elif self.outCounter[idf] > 1 and self.wasAlerted[idf]: 
+        elif self.outCounter[idf] > 1:
             print()
             print('Animal {} successfully deterred...'.format(idf))
             print()
             self.sendFeDetectionMessage(name, 1, 'success')
             self.outCounter[idf] = 0
+            #self.wasAlerted[idf] = False
         else:
             print()
             print('Resetting to normal...')
@@ -221,6 +231,12 @@ class CrossCameraMonitor:
             del self.activeDetectionMap[name]
             self.sendFeDetectionMessage(name, 0, 'None')
         self.activeDetectionLock.release()
+        #for k in self.wasAlerted:
+        #    self.wasAlerted[k] = False
+
+        #for k in self.staticMap:
+        #    self.staticMap[k] = False
+
 
     def getActiveDetections(self):
         # Combine tracklets from all registered device, sort them by time first
@@ -242,6 +258,7 @@ class CrossCameraMonitor:
             if not len(tracks) > 0:
                 continue
             # Pick latest device only
+            tracks = sorted(tracks, key=lambda x: x[2])
             det = tracks[-1]
             time = int(det[2] * 1000) # Conver to ms since epoch
             tr = ''
@@ -256,7 +273,7 @@ class CrossCameraMonitor:
             th.start()
 
     def sendImage(self, name, image, dets, ids):
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        #image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         for i in range(len(dets)):
             image = drawBoundingBoxLabel(image, ids[i], dets[i])
 

@@ -5,7 +5,8 @@ from sklearn.metrics.pairwise import euclidean_distances
 import time
 
 DeviceDetection = namedtuple('DeviceDetection', 'detections timestamp')
-LABELS = {0: 'Human', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
+#LABELS = {0: 'Human', 1: 'Tiger', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
+LABELS = {0: 'Human', 1: 'Human', 2: 'Elephant', 3: 'Jaguar', 4: 'Human'}
 
 class FeatureVectorDatabase:
     def __init__(self):
@@ -30,7 +31,7 @@ class IdAssociator:
         self.featureDb = featureDb
         self.perDeviceDetHistory = dict()
         #self.SIMILARITY_THRESH = 45.0
-        self.SIMILARITY_THRESH = 200000.0
+        self.SIMILARITY_THRESH = 750.0
         self.devDetMap = dict()
 
 
@@ -44,6 +45,7 @@ class IdAssociator:
         returns identities for each vector specified
         '''
         knownFeatures = self.featureDb.getKnownFeatureVectors(classid)
+
         if len(knownFeatures) == 0:
             return [x for x in range(len(vectors))]
 
@@ -51,9 +53,16 @@ class IdAssociator:
         knownVectors = np.array([x[0] for x in knownFeatures])
         distMat = euclidean_distances(vectors, knownVectors)
         identities = []
+        countmap = defaultdict(int)
+        for f in knownFeatures:
+            countmap[f[1]] += 1
+        minNumSamples = min([v for _,v in countmap.items()])
+
         for i in range(len(vectors)):
             vec = distMat[i] 
-            if np.min(vec) > self.SIMILARITY_THRESH:
+            print(np.min(vec), np.max(vec))
+            print(minNumSamples)
+            if np.min(vec) > self.SIMILARITY_THRESH and minNumSamples > 3:
                 # Return new id
                 identities.append(len(knownIds))
             else:
