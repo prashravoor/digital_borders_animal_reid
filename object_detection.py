@@ -76,7 +76,8 @@ class ObjectDetector:
     def getBatchDetectionResults(self, images):
         origDims = [(image.shape[1], image.shape[0]) for image in images]
 
-        images = [cv2.resize(image, (self.INPUT_WIDTH, self.INPUT_HEIGHT)) for image in images]
+        images = [cv2.cvtColor(cv2.resize(image, (self.INPUT_WIDTH, self.INPUT_HEIGHT)),
+                                cv2.COLOR_BGR2RGB) for image in images]
 
         input_tensor = tf.stack([tf.convert_to_tensor(image) for image in images])
 
