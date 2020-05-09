@@ -1,3 +1,376 @@
+diff --git a/configs/amur_softmax_triplet_with_center.yml b/configs/amur_softmax_triplet_with_center.yml
+index e69de29..9d55128 100644
+--- a/configs/amur_softmax_triplet_with_center.yml
++++ b/configs/amur_softmax_triplet_with_center.yml
+@@ -0,0 +1,69 @@
++MODEL:
++  PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet201-c1103571.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('amur')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 100
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 10
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 16
++  RE_RANKING: 'no'
++  WEIGHT: "path"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "amur_test"
++
++
+diff --git a/configs/chimp_softmax_triplet_with_center.yml b/configs/chimp_softmax_triplet_with_center.yml
+index e69de29..aad73f7 100644
+--- a/configs/chimp_softmax_triplet_with_center.yml
++++ b/configs/chimp_softmax_triplet_with_center.yml
+@@ -0,0 +1,70 @@
++MODEL:
++  PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet201-c1103571.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('chimp')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 120
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 50
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 16
++  RE_RANKING: 'no'
++  #WEIGHT: "K:\\SourceCode\\DigitalBorders\\digital_borders_animal_reid\\trained_models\\chimp\\chimp_no_ls_807_acc_split_2_densenet_model_90.pth"
++  WEIGHT: "path"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "chimp_test"
++
++
+diff --git a/configs/elp_softmax_triplet_with_center.yml b/configs/elp_softmax_triplet_with_center.yml
+index e69de29..8e08dee 100644
+--- a/configs/elp_softmax_triplet_with_center.yml
++++ b/configs/elp_softmax_triplet_with_center.yml
+@@ -0,0 +1,73 @@
++MODEL:
++  PRETRAIN_CHOICE: 'imagenet'
++  #PRETRAIN_CHOICE: 'self'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet201-c1103571.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('elp')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 12
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 150
++  BASE_LR: 0.0002
++
++  #CLUSTER_MARGIN: 0.3
++  CLUSTER_MARGIN: 1.0
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 24
++
++  #STEPS: [50, 100, 200, 300]
++  #STEPS: [30, 70]
++  STEPS: [50, 70, 90, 120]
++  #STEPS: [30, 60]
++  GAMMA: 0.1
++  #GAMMA: 0.5
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 20
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 10
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 8
++  RE_RANKING: 'no'
++  #WEIGHT: "K:\\SourceCode\\DigitalBorders\\digital_borders_animal_reid\\reid-strong-baseline\\elp_test\\resnet50_model_110.pth"
++  WEIGHT: "path"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "elp_test"
+diff --git a/configs/facescrub_softmax_triplet_with_center.yml b/configs/facescrub_softmax_triplet_with_center.yml
+index e69de29..3aaacb8 100644
+--- a/configs/facescrub_softmax_triplet_with_center.yml
++++ b/configs/facescrub_softmax_triplet_with_center.yml
+@@ -0,0 +1,67 @@
++MODEL:
++  PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet201-c1103571.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('facescrub')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 100
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 400
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 16
++  RE_RANKING: 'no'
++  WEIGHT: "path"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "facescrub_test"
+diff --git a/configs/jaguar_softmax_triplet_with_center.yml b/configs/jaguar_softmax_triplet_with_center.yml
+index e69de29..71704de 100644
+--- a/configs/jaguar_softmax_triplet_with_center.yml
++++ b/configs/jaguar_softmax_triplet_with_center.yml
+@@ -0,0 +1,69 @@
++MODEL:
++  PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet201-c1103571.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('jaguar')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 120
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 10
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 16
++  RE_RANKING: 'no'
++  WEIGHT: "K:\\SourceCode\\DigitalBorders\\reid-strong-baseline\\jaguar_test\\resnet50_model_110.pth"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "jaguar_test"
++
++
 diff --git a/configs/softmax_triplet_with_center.yml b/configs/softmax_triplet_with_center.yml
 index 1158b35..6f0a3e3 100644
 --- a/configs/softmax_triplet_with_center.yml
@@ -74,27 +447,406 @@ index 1158b35..6f0a3e3 100644
 +OUTPUT_DIR: "elp_test"
  
  
+diff --git a/configs/test_amur_softmax_triplet_with_center.yml b/configs/test_amur_softmax_triplet_with_center.yml
+index e69de29..de3bcf3 100644
+--- a/configs/test_amur_softmax_triplet_with_center.yml
++++ b/configs/test_amur_softmax_triplet_with_center.yml
+@@ -0,0 +1,71 @@
++MODEL:
++  #PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_CHOICE: 'self'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet201-c1103571.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('amur')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 2
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 100
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 10
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 4
++  RE_RANKING: 'no'
++  #WEIGHT: "K:\\SourceCode\\DigitalBorders\\digital_borders_animal_reid\\trained_models\\amur\\amur_no_ls_8_ins_996_acc_ds_5_resnet50_model_80.pth"
++  WEIGHT: "K:\\SourceCode\\DigitalBorders\\reid-strong-baseline\\amur_test\\resnet50_model_60.pth"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "amur_test"
++
++
+diff --git a/configs/test_chimp_softmax_triplet_with_center.yml b/configs/test_chimp_softmax_triplet_with_center.yml
+index e69de29..5affa7f 100644
+--- a/configs/test_chimp_softmax_triplet_with_center.yml
++++ b/configs/test_chimp_softmax_triplet_with_center.yml
+@@ -0,0 +1,68 @@
++MODEL:
++  PRETRAIN_CHOICE: 'self'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('chimp')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 120
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [50, 80]
++  #STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 100
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 16
++  RE_RANKING: 'no'
++  WEIGHT: "K:\\SourceCode\\DigitalBorders\\reid-strong-baseline\\chimp_test\\resnet50_model_100.pth"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "chimp_test"
++
++
+diff --git a/configs/test_elp_softmax_triplet_with_center.yml b/configs/test_elp_softmax_triplet_with_center.yml
+index e69de29..d64c44b 100644
+--- a/configs/test_elp_softmax_triplet_with_center.yml
++++ b/configs/test_elp_softmax_triplet_with_center.yml
+@@ -0,0 +1,71 @@
++MODEL:
++  #PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_CHOICE: 'self'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  #PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\densenet201-c1103571.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('elp')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 12
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 150
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  #STEPS: [50, 80]
++  STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 10
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 4
++  RE_RANKING: 'no'
++  #WEIGHT: "K:\\SourceCode\\DigitalBorders\\digital_borders_animal_reid\\trained_models\\elp\\elp_no_ls_12_ins_resnet50_model_80.pth"
++  WEIGHT: "K:\\SourceCode\\DigitalBorders\\digital_borders_animal_reid\\trained_models\\for_upload\\elp\\77_repro\\resnet50_model_110.pth"
++  #WEIGHT: "K:\\SourceCode\\DigitalBorders\\reid-strong-baseline\\elp_test\\resnet50_model_360.pth"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "elp_test"
++
+diff --git a/configs/test_facescrub_softmax_triplet_with_center.yml b/configs/test_facescrub_softmax_triplet_with_center.yml
+index e69de29..42e2af5 100644
+--- a/configs/test_facescrub_softmax_triplet_with_center.yml
++++ b/configs/test_facescrub_softmax_triplet_with_center.yml
+@@ -0,0 +1,70 @@
++MODEL:
++  #PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_CHOICE: 'self'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  #NAME: 'resnet50'
++  NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('facescrub')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 2
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 100
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 400
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 4
++  RE_RANKING: 'no'
++  #WEIGHT: "K:\\SourceCode\\DigitalBorders\\digital_borders_animal_reid\\trained_models\\facescrub\\facescrub_no_ls_8_ins_ds_4_925_acc_resnet50_model_70.pth"
++  WEIGHT: "K:\\SourceCode\\DigitalBorders\\reid-strong-baseline\\facescrub_test\\densenet_model_60.pth"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "facescrub_test"
++
++
+diff --git a/configs/test_jaguar_softmax_triplet_with_center.yml b/configs/test_jaguar_softmax_triplet_with_center.yml
+index e69de29..aa6b18f 100644
+--- a/configs/test_jaguar_softmax_triplet_with_center.yml
++++ b/configs/test_jaguar_softmax_triplet_with_center.yml
+@@ -0,0 +1,68 @@
++MODEL:
++  #PRETRAIN_CHOICE: 'imagenet'
++  PRETRAIN_CHOICE: 'self'
++  PRETRAIN_PATH: 'C:\\Users\\Prashanth\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth'
++  METRIC_LOSS_TYPE: 'triplet_center'
++  IF_LABELSMOOTH: 'off'
++  IF_WITH_CENTER: 'yes'
++  NAME: 'resnet50'
++  #NAME: 'densenet'
++
++INPUT:
++  SIZE_TRAIN: [256, 256]
++  SIZE_TEST: [256, 256]
++  PROB: 0.5 # random horizontal flip
++  RE_PROB: 0.5 # random erasing
++  PADDING: 10
++
++DATASETS:
++  NAMES: ('jaguar')
++  ROOT_DIR: ('data')
++
++DATALOADER:
++  SAMPLER: 'softmax_triplet'
++  NUM_INSTANCE: 8
++  NUM_WORKERS: 0
++
++SOLVER:
++  OPTIMIZER_NAME: 'Adam'
++  MAX_EPOCHS: 120
++  BASE_LR: 0.0001
++
++  CLUSTER_MARGIN: 0.3
++
++  CENTER_LR: 0.5
++  CENTER_LOSS_WEIGHT: 0.0005
++
++  RANGE_K: 2
++  RANGE_MARGIN: 0.3
++  RANGE_ALPHA: 0
++  RANGE_BETA: 1
++  RANGE_LOSS_WEIGHT: 1
++
++  BIAS_LR_FACTOR: 1
++  WEIGHT_DECAY: 0.0005
++  WEIGHT_DECAY_BIAS: 0.0005
++  IMS_PER_BATCH: 16
++
++  STEPS: [30, 70]
++  #STEPS: [30, 60]
++  GAMMA: 0.01
++
++  WARMUP_FACTOR: 0.01
++  WARMUP_ITERS: 10
++  WARMUP_METHOD: 'linear'
++
++  CHECKPOINT_PERIOD: 10
++  LOG_PERIOD: 10
++  EVAL_PERIOD: 10
++
++TEST:
++  IMS_PER_BATCH: 4
++  RE_RANKING: 'no'
++  #WEIGHT: "K:\\SourceCode\\DigitalBorders\\digital_borders_animal_reid\\trained_models\\jaguar\\jag_no_ls_8_ins_88_acc_ds_6_resnet50_model_60.pth"
++  WEIGHT: "K:\\SourceCode\\DigitalBorders\\reid-strong-baseline\\jaguar_test\\resnet50_model_40.pth"
++  NECK_FEAT: 'after'
++  FEAT_NORM: 'yes'
++
++OUTPUT_DIR: "jaguar_test"
+\ No newline at end of file
 diff --git a/data/datasets/__init__.py b/data/datasets/__init__.py
-index fb8dc13..6c20a08 100644
+index fb8dc13..04dab06 100644
 --- a/data/datasets/__init__.py
 +++ b/data/datasets/__init__.py
-@@ -8,6 +8,9 @@ from .dukemtmcreid import DukeMTMCreID
+@@ -8,7 +8,12 @@ from .dukemtmcreid import DukeMTMCreID
  from .market1501 import Market1501
  from .msmt17 import MSMT17
  from .veri import VeRi
 +from .amur import Amur
 +from .jaguar import Jaguar
 +from .elp import Elp
++from .facescrub import FaceScrub
  from .dataset_loader import ImageDataset
++from .chimp import Chimp
  
  __factory = {
-@@ -16,6 +19,9 @@ __factory = {
+     'market1501': Market1501,
+@@ -16,6 +21,11 @@ __factory = {
      'dukemtmc': DukeMTMCreID,
      'msmt17': MSMT17,
      'veri': VeRi,
 +    'amur': Amur,
 +    'jaguar' : Jaguar,
-+    'elp' : Elp
++    'elp' : Elp,
++    'facescrub' : FaceScrub,
++    'chimp' : Chimp
  }
  
  
@@ -165,6 +917,96 @@ index e69de29..bc2715a 100644
 +
 +    def _process_dir(self, dir_path, relabel=False):
 +        img_paths = glob.glob(osp.join(dir_path, '*.png'))
++        pattern = re.compile(r'([-\d]+)_(\d+)_(\d+)')
++
++        pid_container = set()
++        for img_path in img_paths:
++            pid, _, _ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            pid_container.add(pid)
++        pid2label = {pid: label for label, pid in enumerate(pid_container)}
++
++        dataset = []
++        for img_path in img_paths:
++            pid, camid,_ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            assert 0 <= pid <= 776  # pid == 0 means background
++            assert 0 <= camid <= 20
++            #camid -= 1  # index starts from 0
++            if relabel: pid = pid2label[pid]
++            dataset.append((img_path, pid, camid))
++
++        return dataset
++
+diff --git a/data/datasets/chimp.py b/data/datasets/chimp.py
+index e69de29..fb21e58 100644
+--- a/data/datasets/chimp.py
++++ b/data/datasets/chimp.py
+@@ -0,0 +1,85 @@
++import glob
++import re
++
++import os.path as osp
++
++from .bases import BaseImageDataset
++
++
++class Chimp(BaseImageDataset):
++    """
++       VeRi-776
++       Reference:
++       Liu, Xinchen, et al. "Large-scale vehicle re-identification in urban surveillance videos." ICME 2016.
++
++       URL:https://vehiclereid.github.io/VeRi/
++
++       Dataset statistics:
++       # identities: 776
++       # images: 37778 (train) + 1678 (query) + 11579 (gallery)
++       # cameras: 20
++       """
++
++    dataset_dir = 'chimp'
++
++    def __init__(self, root='../', verbose=True, **kwargs):
++        super(Chimp, self).__init__()
++        self.dataset_dir = osp.join(root, self.dataset_dir)
++        self.train_dir = osp.join(self.dataset_dir, 'image_train')
++        self.query_dir = osp.join(self.dataset_dir, 'image_query')
++        self.gallery_dir = osp.join(self.dataset_dir, 'image_gallery')
++
++        self._check_before_run()
++
++        train = self._process_dir(self.train_dir, relabel=True)
++        query = self._process_dir(self.query_dir, relabel=False)
++        gallery = self._process_dir(self.gallery_dir, relabel=False)
++        #print('Train: {}, Query: {}, Gallery: {}'.format(len(train), len(query), len(gallery)))
++
++        if verbose:
++            print("=> Chimp Dataset loaded")
++            self.print_dataset_statistics(train, query, gallery)
++
++        self.train = train
++        self.query = query
++        self.gallery = gallery
++
++        self.num_train_pids, self.num_train_imgs, self.num_train_cams = self.get_imagedata_info(self.train)
++        self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
++        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
++
++    def _check_before_run(self):
++        """Check if all files are available before going deeper"""
++        if not osp.exists(self.dataset_dir):
++            raise RuntimeError("'{}' is not available".format(self.dataset_dir))
++        if not osp.exists(self.train_dir):
++            raise RuntimeError("'{}' is not available".format(self.train_dir))
++        if not osp.exists(self.query_dir):
++            raise RuntimeError("'{}' is not available".format(self.query_dir))
++        if not osp.exists(self.gallery_dir):
++            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
++
++    def _process_dir(self, dir_path, relabel=False):
++        img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
++        #print('Total images in {}: {}'.format(dir_path, len(img_paths)))
 +        pattern = re.compile(r'([-\d]+)_(\d+)_(\d+)')
 +
 +        pid_container = set()
@@ -300,6 +1142,96 @@ index 38f9783..ed855cb 100644
              # this condition is true when query identity does not appear in gallery
              continue
  
+diff --git a/data/datasets/facescrub.py b/data/datasets/facescrub.py
+index e69de29..cc9ce3f 100644
+--- a/data/datasets/facescrub.py
++++ b/data/datasets/facescrub.py
+@@ -0,0 +1,85 @@
++import glob
++import re
++
++import os.path as osp
++
++from .bases import BaseImageDataset
++
++
++class FaceScrub(BaseImageDataset):
++    """
++       VeRi-776
++       Reference:
++       Liu, Xinchen, et al. "Large-scale vehicle re-identification in urban surveillance videos." ICME 2016.
++
++       URL:https://vehiclereid.github.io/VeRi/
++
++       Dataset statistics:
++       # identities: 776
++       # images: 37778 (train) + 1678 (query) + 11579 (gallery)
++       # cameras: 20
++       """
++
++    dataset_dir = 'facescrub'
++
++    def __init__(self, root='../', verbose=True, **kwargs):
++        super(FaceScrub, self).__init__()
++        self.dataset_dir = osp.join(root, self.dataset_dir)
++        self.train_dir = osp.join(self.dataset_dir, 'image_train')
++        self.query_dir = osp.join(self.dataset_dir, 'image_query')
++        self.gallery_dir = osp.join(self.dataset_dir, 'image_gallery')
++
++        self._check_before_run()
++
++        train = self._process_dir(self.train_dir, relabel=True)
++        query = self._process_dir(self.query_dir, relabel=False)
++        gallery = self._process_dir(self.gallery_dir, relabel=False)
++        #print('Train: {}, Query: {}, Gallery: {}'.format(len(train), len(query), len(gallery)))
++
++        if verbose:
++            print("=> Jaguar Dataset loaded")
++            self.print_dataset_statistics(train, query, gallery)
++
++        self.train = train
++        self.query = query
++        self.gallery = gallery
++
++        self.num_train_pids, self.num_train_imgs, self.num_train_cams = self.get_imagedata_info(self.train)
++        self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
++        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
++
++    def _check_before_run(self):
++        """Check if all files are available before going deeper"""
++        if not osp.exists(self.dataset_dir):
++            raise RuntimeError("'{}' is not available".format(self.dataset_dir))
++        if not osp.exists(self.train_dir):
++            raise RuntimeError("'{}' is not available".format(self.train_dir))
++        if not osp.exists(self.query_dir):
++            raise RuntimeError("'{}' is not available".format(self.query_dir))
++        if not osp.exists(self.gallery_dir):
++            raise RuntimeError("'{}' is not available".format(self.gallery_dir))
++
++    def _process_dir(self, dir_path, relabel=False):
++        img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
++        #print('Total images in {}: {}'.format(dir_path, len(img_paths)))
++        pattern = re.compile(r'([-\d]+)_(\d+)_(\d+)')
++
++        pid_container = set()
++        for img_path in img_paths:
++            pid, _, _ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            pid_container.add(pid)
++        pid2label = {pid: label for label, pid in enumerate(pid_container)}
++
++        dataset = []
++        for img_path in img_paths:
++            pid, camid,_ = map(int, pattern.search(img_path).groups())
++            if pid == -1: continue  # junk images are just ignored
++            assert 0 <= pid <= 776  # pid == 0 means background
++            assert 0 <= camid <= 20
++            #camid -= 1  # index starts from 0
++            if relabel: pid = pid2label[pid]
++            dataset.append((img_path, pid, camid))
++
++        return dataset
++
 diff --git a/data/datasets/jaguar.py b/data/datasets/jaguar.py
 index e69de29..8f68fd5 100644
 --- a/data/datasets/jaguar.py
@@ -390,8 +1322,65 @@ index e69de29..8f68fd5 100644
 +
 +        return dataset
 +
+diff --git a/engine/inference.py b/engine/inference.py
+index 77781e5..25e1237 100644
+--- a/engine/inference.py
++++ b/engine/inference.py
+@@ -71,5 +71,5 @@ def inference(
+     cmc, mAP = evaluator.state.metrics['r1_mAP']
+     logger.info('Validation Results')
+     logger.info("mAP: {:.1%}".format(mAP))
+-    for r in [1, 5, 10]:
++    for r in [1, 3, 5, 10, 20, 50]:
+         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+diff --git a/engine/trainer.py b/engine/trainer.py
+index 119c6c6..c38836b 100644
+--- a/engine/trainer.py
++++ b/engine/trainer.py
+@@ -13,6 +13,7 @@ from ignite.handlers import ModelCheckpoint, Timer
+ from ignite.metrics import RunningAverage
+ 
+ from utils.reid_metric import R1_mAP
++import os
+ 
+ global ITER
+ ITER = 0
+@@ -202,9 +203,9 @@ def do_train(
+             cmc, mAP = evaluator.state.metrics['r1_mAP']
+             logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
+             logger.info("mAP: {:.1%}".format(mAP))
+-            for r in [1, 5, 10]:
++            for r in [1, 5, 10, 20]:
+                 logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+-
++        
+     trainer.run(train_loader, max_epochs=epochs)
+ 
+ 
+@@ -284,7 +285,20 @@ def do_train_with_center(
+             cmc, mAP = evaluator.state.metrics['r1_mAP']
+             logger.info("Validation Results - Epoch: {}".format(engine.state.epoch))
+             logger.info("mAP: {:.1%}".format(mAP))
+-            for r in [1, 5, 10]:
++            cmcs = []
++            ranks = [1, 3, 5, 10, 20, 50]
++            for r in ranks:
+                 logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
++                cmcs.append(cmc[r-1])
++
++            filename = os.path.join(output_dir, '{}.txt'.format(output_dir))
++            if not os.path.exists(filename):
++                with open(filename, 'w') as f:
++                    f.write(','.join(['Epoch', 'mAP'] + [str(x) for x in ranks]))
++                    f.write('\n')
++
++            with open(filename, 'a') as f:
++                res = '{},{},{}\n'.format(engine.state.epoch, mAP, ','.join([str(x) for x in cmcs]))
++                f.write(res)
+ 
+     trainer.run(train_loader, max_epochs=epochs)
 diff --git a/modeling/backbones/resnet.py b/modeling/backbones/resnet.py
-index 86364d2..a4e7b48 100644
+index 86364d2..c8a722b 100644
 --- a/modeling/backbones/resnet.py
 +++ b/modeling/backbones/resnet.py
 @@ -94,13 +94,16 @@ class ResNet(nn.Module):
@@ -404,11 +1393,11 @@ index 86364d2..a4e7b48 100644
 +        #self.dropout = nn.Dropout(0.5)
          self.layer1 = self._make_layer(block, 64, layers[0])
          self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-+        #self.dropout1 = nn.Dropout(0.5)
++        self.dropout1 = nn.Dropout(0.25)
          self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
          self.layer4 = self._make_layer(
              block, 512, layers[3], stride=last_stride)
-+        #self.dropout2 = nn.Dropout(0.5)
++        self.dropout2 = nn.Dropout(0.5)
  
      def _make_layer(self, block, planes, blocks, stride=1):
          downsample = None
@@ -423,15 +1412,15 @@ index 86364d2..a4e7b48 100644
  
          x = self.layer1(x)
          x = self.layer2(x)
-+        #x = self.dropout1(x)
++        x = self.dropout1(x)
          x = self.layer3(x)
          x = self.layer4(x)
-+        #x = self.dropout2(x)
++        x = self.dropout2(x)
  
          return x
  
 diff --git a/modeling/baseline.py b/modeling/baseline.py
-index f04f786..8a6cbd3 100644
+index f04f786..b3a380e 100644
 --- a/modeling/baseline.py
 +++ b/modeling/baseline.py
 @@ -10,6 +10,7 @@ from torch import nn
@@ -442,30 +1431,52 @@ index f04f786..8a6cbd3 100644
  
  
  def weights_init_kaiming(m):
-@@ -127,8 +128,11 @@ class Baseline(nn.Module):
+@@ -40,6 +41,7 @@ class Baseline(nn.Module):
+ 
+     def __init__(self, num_classes, last_stride, model_path, neck, neck_feat, model_name, pretrain_choice):
+         super(Baseline, self).__init__()
++        self.model_name = model_name
+         if model_name == 'resnet18':
+             self.in_planes = 512
+             self.base = ResNet(last_stride=last_stride, 
+@@ -54,6 +56,8 @@ class Baseline(nn.Module):
+             self.base = ResNet(last_stride=last_stride,
+                                block=Bottleneck,
+                                layers=[3, 4, 6, 3])
++            #self.base = models.resnet50(pretrained=True)
++            #self.base.fc = nn.Identity()
+         elif model_name == 'resnet101':
+             self.base = ResNet(last_stride=last_stride,
+                                block=Bottleneck, 
+@@ -127,8 +131,11 @@ class Baseline(nn.Module):
                                last_stride=last_stride)
          elif model_name == 'resnet50_ibn_a':
              self.base = resnet50_ibn_a(last_stride)
 +        elif model_name == 'densenet':
-+            self.base = models.densenet121(pretrained=True)
-+            self.base.classifier = nn.Sequential(nn.Dropout(0.5), nn.Linear(1024, self.in_planes))
++            self.base = models.densenet201(pretrained=True)
++            self.base.classifier = nn.Sequential(nn.Dropout(0.5), nn.Linear(1920, self.in_planes))
  
 -        if pretrain_choice == 'imagenet':
 +        if pretrain_choice == 'imagenet' and not 'densenet' == model_name:
              self.base.load_param(model_path)
              print('Loading pretrained ImageNet model......')
  
-@@ -152,7 +156,8 @@ class Baseline(nn.Module):
+@@ -152,9 +159,12 @@ class Baseline(nn.Module):
  
      def forward(self, x):
  
 -        global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
-+        #global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
-+        global_feat = self.base(x)
++        if not self.model_name == 'densenet':
++            global_feat = self.gap(self.base(x))  # (b, 2048, 1, 1)
++        else:
++            global_feat = self.base(x)
          global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
- 
+-
++        
          if self.neck == 'no':
-@@ -172,8 +177,15 @@ class Baseline(nn.Module):
+             feat = global_feat
+         elif self.neck == 'bnneck':
+@@ -172,8 +182,15 @@ class Baseline(nn.Module):
                  return global_feat
  
      def load_param(self, trained_path):
@@ -481,11 +1492,55 @@ index f04f786..8a6cbd3 100644
 +            if 'classifier' in k:
 +                continue
 +            self.state_dict()[k].copy_(param_dict.state_dict()[k])
+diff --git a/tools/test.py b/tools/test.py
+index 1f37050..9f54e0c 100644
+--- a/tools/test.py
++++ b/tools/test.py
+@@ -19,6 +19,8 @@ from engine.inference import inference
+ from modeling import build_model
+ from utils.logger import setup_logger
+ 
++import numpy as np
++import random
+ 
+ def main():
+     parser = argparse.ArgumentParser(description="ReID Baseline Inference")
+@@ -54,7 +56,7 @@ def main():
+ 
+     if cfg.MODEL.DEVICE == "cuda":
+         os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
+-    cudnn.benchmark = True
++    #cudnn.benchmark = True
+ 
+     train_loader, val_loader, num_query, num_classes = make_data_loader(cfg)
+     model = build_model(cfg, num_classes)
+@@ -64,4 +66,11 @@ def main():
+ 
+ 
+ if __name__ == '__main__':
++    manualSeed = 42
++
++    np.random.seed(manualSeed)
++    random.seed(manualSeed)
++    torch.manual_seed(manualSeed)
++    cudnn.deterministic = True
++    cudnn.benchmark = False
+     main()
 diff --git a/tools/train.py b/tools/train.py
-index 3bb7835..5fc6faa 100644
+index 3bb7835..3060db6 100644
 --- a/tools/train.py
 +++ b/tools/train.py
-@@ -43,8 +43,10 @@ def train(cfg):
+@@ -20,7 +20,8 @@ from layers import make_loss, make_loss_with_center
+ from solver import make_optimizer, make_optimizer_with_center, WarmupMultiStepLR
+ 
+ from utils.logger import setup_logger
+-
++import random
++import numpy as np
+ 
+ def train(cfg):
+     # prepare dataset
+@@ -43,8 +44,10 @@ def train(cfg):
              print('Start epoch:', start_epoch)
              path_to_optimizer = cfg.MODEL.PRETRAIN_PATH.replace('model', 'optimizer')
              print('Path to the checkpoint of optimizer:', path_to_optimizer)
@@ -498,7 +1553,7 @@ index 3bb7835..5fc6faa 100644
              scheduler = WarmupMultiStepLR(optimizer, cfg.SOLVER.STEPS, cfg.SOLVER.GAMMA, cfg.SOLVER.WARMUP_FACTOR,
                                            cfg.SOLVER.WARMUP_ITERS, cfg.SOLVER.WARMUP_METHOD, start_epoch)
          elif cfg.MODEL.PRETRAIN_CHOICE == 'imagenet':
-@@ -86,10 +88,14 @@ def train(cfg):
+@@ -86,10 +89,14 @@ def train(cfg):
              print('Path to the checkpoint of center_param:', path_to_center_param)
              path_to_optimizer_center = cfg.MODEL.PRETRAIN_PATH.replace('model', 'optimizer_center')
              print('Path to the checkpoint of optimizer_center:', path_to_optimizer_center)
@@ -517,7 +1572,7 @@ index 3bb7835..5fc6faa 100644
              scheduler = WarmupMultiStepLR(optimizer, cfg.SOLVER.STEPS, cfg.SOLVER.GAMMA, cfg.SOLVER.WARMUP_FACTOR,
                                            cfg.SOLVER.WARMUP_ITERS, cfg.SOLVER.WARMUP_METHOD, start_epoch)
          elif cfg.MODEL.PRETRAIN_CHOICE == 'imagenet':
-@@ -146,7 +152,7 @@ def main():
+@@ -146,13 +153,21 @@ def main():
          with open(args.config_file, 'r') as cf:
              config_str = "\n" + cf.read()
              logger.info(config_str)
@@ -526,10 +1581,30 @@ index 3bb7835..5fc6faa 100644
  
      if cfg.MODEL.DEVICE == "cuda":
          os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID    # new add by gu
+-    cudnn.benchmark = True
++    #cudnn.benchmark = True
+     train(cfg)
+ 
+ 
+ if __name__ == '__main__':
++    manualSeed = 42
++
++    np.random.seed(manualSeed)
++    random.seed(manualSeed)
++    torch.manual_seed(manualSeed)
++    cudnn.deterministic = True
++    cudnn.benchmark = False
++    
+     main()
 diff --git a/train.bat b/train.bat
-index e69de29..9c988c5 100644
+index e69de29..99103bd 100644
 --- a/train.bat
 +++ b/train.bat
-@@ -0,0 +1 @@
-+python tools/train.py --config_file=configs\softmax_triplet_with_center.yml MODEL.DEVICE_ID "('0')" DATASETS.NAMES "('elp')" DATASETS.ROOT_DIR "('data')" OUTPUT_DIR "('elp_test')"
+@@ -0,0 +1,6 @@
++@echo off
++if "%1"=="" goto usage
++python tools/train.py --config_file=%1 MODEL.DEVICE_ID "('0')" 
++goto :eof
++:usage
++@echo A config file is required
 \ No newline at end of file

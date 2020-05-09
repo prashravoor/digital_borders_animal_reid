@@ -11,10 +11,14 @@ from scipy.spatial import distance_matrix
 import sys
 sys.path.insert(0, '../reid-strong-baseline')
 from modeling import Baseline
+import random
 
 def loadModel(modelpath):
     dummy = 10
-    mdl = Baseline(dummy, 1, modelpath, 'bnneck', 'after', 'resnet50', 'self')
+    if 'densenet' in modelpath:
+        mdl = Baseline(dummy, 1, modelpath, 'bnneck', 'after', 'densenet', 'self')
+    else:
+        mdl = Baseline(dummy, 1, modelpath, 'bnneck', 'after', 'resnet50', 'self')
     mdl.load_param(modelpath)
 
     model = nn.DataParallel(mdl)
@@ -25,7 +29,7 @@ def loadModel(modelpath):
 def getRandomClosedReidSplits(img_folder):
     # Closed set ReID
 
-    images = [x for x in os.listdir(img_folder) if x.endswith('.jpg')]
+    images = [x for x in os.listdir(img_folder) if x.endswith('.jpg') or x.endswith('.png')]
 
     with open(os.path.join(img_folder, 'class_mapping.txt')) as f:
         mapping = {x.split('\t')[0].strip() : x.split('\t')[1].strip() for x in f.readlines()}
@@ -50,11 +54,21 @@ def getRandomClosedReidSplits(img_folder):
 
     for k,v in rev_map.items():
         # For each remaining identity, one is moved to qry, and rest to identity
-        qry = np.random.choice(v, 1)[0]
-        x_qry_names.append(qry)
-        y_qry.append(mapping[qry])
-
-        gal = [x for x in v if not x == qry]
+        #qry = np.random.choice(v, 1)[0]
+        #x_qry_names.append(qry)
+        #y_qry.append(mapping[qry])
+        #gal = [x for x in v if not x == qry]
+        
+        #ids = [mapping[x] for x in gal]
+        #x_gal_names.extend(gal)
+        #y_gal.extend(ids)
+        
+        n = int(np.ceil(len(v) * .25))
+        qry = np.random.choice(v, n)
+        x_qry_names.extend(qry)
+        y_qry.extend([mapping[x] for x in qry])
+        gal = [x for x in v if not x in qry]
+        
         ids = [mapping[x] for x in gal]
         x_gal_names.extend(gal)
         y_gal.extend(ids)
@@ -137,39 +151,43 @@ def getAllCmc(x_gal, x_qry, y_gal, y_qry, ranks):
     m, n = distmat.shape
 
     all_cmc = []
+    all_AP = []
     for x in range(m):
         distances = distmat[x]
         indices = np.argsort(distances)
         org_classes = y_gal[indices]
         org_class = y_qry[x]
         matches = (org_class == org_classes).astype(int)
+        
         cmc = matches.cumsum()
         cmc[cmc > 1] = 1
         all_cmc.append(cmc)
         
+        num_rel = matches.sum()
+        tmp_cmc = matches.cumsum()
+        tmp_cmc = [x / (i + 1.) for i, x in enumerate(tmp_cmc)]
+        tmp_cmc = np.asarray(tmp_cmc) * matches
+        AP = tmp_cmc.sum() / num_rel
+        all_AP.append(AP)
+        
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     all_cmc = all_cmc.sum(0) / len(all_cmc)
-    return all_cmc
+    mAP = np.mean(all_AP)
     
-if __name__ == '__main__':
-    args = sys.argv
-    if not len(args) == 3:
-        print('Usage: cmd <model path> <image folder>')
-        exit()
-        
-    modelpath = args[1]
-    img_folder = args[2]
-
-    ranks = [1, 3, 5, 10, 20, 50]
+    return all_cmc, mAP
+    
+def getAverageCmcMap(modelpath, img_folder, ranks = [1, 3, 5, 10, 20, 50]):
     maxrank = max(ranks)
     mean_cmc = []
+    all_map = []
     first = True
     for _ in range(3):
         x_gal_names, y_gal, x_qry_names, y_qry = getRandomClosedReidSplits(img_folder)
         model = loadModel(modelpath)
         x_gal, x_qry = extractFeatures(x_gal_names, x_qry_names, model)
-        all_cmc = getAllCmc(x_gal, x_qry, y_gal, y_qry, ranks)
+        all_cmc, mAP = getAllCmc(x_gal, x_qry, y_gal, y_qry, ranks)
         mean_cmc.append(all_cmc[:maxrank])
+        all_map.append(mAP)
         
         if first:
             print(','.join(['Rank-{}'.format(x) for x in ranks]))
@@ -179,7 +197,28 @@ if __name__ == '__main__':
     mean_cmc = np.array(mean_cmc)
     means = np.mean(mean_cmc, axis=0)
     stds = np.std(mean_cmc, axis=0)
-    print('Mean Accuracy: {}\nStd. Dev: {}'.format(
-            ','.join(['{:.4f}'.format(means[x-1]) for x in ranks]),
-            ','.join(['{:.4f}'.format(stds[x-1]) for x in ranks]))
-          )
+    mAP = np.mean(all_map)        
+    
+    return mAP, means, stds
+        
+if __name__ == '__main__':
+    args = sys.argv
+    if not len(args) == 3:
+        print('Usage: cmd <model path> <image folder>')
+        exit()
+    
+    manualSeed = 42
+
+    np.random.seed(manualSeed)
+    random.seed(manualSeed)
+    torch.manual_seed(manualSeed)
+    
+    modelpath = args[1]
+    img_folder = args[2]
+    
+    ranks = [1, 3, 5, 10, 20, 50]
+    mAP, means, stds = getAverageCmcMap(modelpath, img_folder, ranks)
+    print('mAP: {:.4f}, Mean Accuracy: {}'.format(mAP, 
+        ','.join(['{:.4f} +- {:.4f}'.format(means[x-1], stds[x-1]) for x in ranks])))
+    
+    

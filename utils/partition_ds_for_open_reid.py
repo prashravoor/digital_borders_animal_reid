@@ -8,7 +8,9 @@ args = sys.argv
 if len(args) < 3:
     print('Usage: cmd <in folder> <out folder> <split number>')
     exit()
-    
+
+np.random.seed(42)
+
 base = args[1]
 outfolder = args[2]
 if len(args) >= 4:
