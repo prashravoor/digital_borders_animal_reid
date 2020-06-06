@@ -31,7 +31,10 @@ def getRandomClosedReidSplits(img_folder):
 
     images = [x for x in os.listdir(img_folder) if x.endswith('.jpg') or x.endswith('.png')]
 
-    with open(os.path.join(img_folder, 'class_mapping.txt')) as f:
+    filename = 'class_mapping.txt'
+    if not os.path.exists(os.path.join(img_folder, filename)):
+        filename = 'normalized_class_mapping.txt'
+    with open(os.path.join(img_folder, filename)) as f:
         mapping = {x.split('\t')[0].strip() : x.split('\t')[1].strip() for x in f.readlines()}
 
     mapping = {os.path.join(img_folder, k):v for k,v in mapping.items() if k in images}
@@ -42,7 +45,7 @@ def getRandomClosedReidSplits(img_folder):
             rev_map[v] = []
         rev_map[v].append(k)
 
-    rev_map = {k:v for k,v in rev_map.items() if len(v) > 1}
+    rev_map = {k:v for k,v in rev_map.items() if len(v) > 2}
     numclasses = len(rev_map)
 
     x_gal_names = []
@@ -53,16 +56,7 @@ def getRandomClosedReidSplits(img_folder):
     num_ids = len(rev_map)
 
     for k,v in rev_map.items():
-        # For each remaining identity, one is moved to qry, and rest to identity
-        #qry = np.random.choice(v, 1)[0]
-        #x_qry_names.append(qry)
-        #y_qry.append(mapping[qry])
-        #gal = [x for x in v if not x == qry]
-        
-        #ids = [mapping[x] for x in gal]
-        #x_gal_names.extend(gal)
-        #y_gal.extend(ids)
-        
+        # For each remaining identity, 25% is moved to qry, and rest to identity
         n = int(np.ceil(len(v) * .25))
         qry = np.random.choice(v, n)
         x_qry_names.extend(qry)
@@ -207,7 +201,7 @@ if __name__ == '__main__':
         print('Usage: cmd <model path> <image folder>')
         exit()
     
-    manualSeed = 42
+    manualSeed = 7
 
     np.random.seed(manualSeed)
     random.seed(manualSeed)

@@ -10,6 +10,7 @@ if not len(args) == 3:
 
 infolder = args[1]
 outfolder = args[2]
+np.random.seed(42)
 
 filename = os.path.join(infolder, 'normalized_class_mapping.txt')
 if not os.path.exists(filename):

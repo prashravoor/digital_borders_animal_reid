@@ -10,7 +10,7 @@ if not len(args) == 2:
 
 infolder = args[1]
 
-images = [x for x in os.listdir(infolder) if x.endswith('.jpg')]
+images = [x for x in os.listdir(infolder) if x.endswith('.jpg') or x.endswith('.png')]
 print('Renaming {} files'.format(len(images)))
 
 counter = 0

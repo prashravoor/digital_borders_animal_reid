@@ -62,12 +62,11 @@ To perform this split, run the `utils/create_open_reid_splits.py` script on the 
 More details on how to format the data suitable for training with `reid-strong-baseline` can be found under the `datasets` folder. <br>
 
 # Identification Pipeline with Triplet loss
+Only a very minimal (and slightly out-of-date) information of training and evaluation is provided here. <br>
+For a more thorough description of the datasets, setting up and training procedure, see [here](https://github.com/prashravoor/reid-strong-baseline.git).<br>
 
 ## Training Using Re-id Strong Baseline
-Download the Open-Reid code base from [here] (https://github.com/Cysu/open-reid.git) <br>
-Apply the changes as required using the patch files stored in `patches` folder <br>
-Download the Re-id strong baseline code from [here](https://github.com/michuanhaohao/reid-strong-baseline.git) <br>
-Apply the changes as required using the patch files stored in `patches` folder <br>
+Checkout the training code from [here](https://github.com/prashravoor/reid-strong-baseline.git) and follow the instructions to complete training.
 
 ### Prepare the dataset
 Multiple scripts are needed to be run before the dataset can be used for reid-strong baseline. All required scripts are listed below. Run them in the same order. The sample assumes images are stored in a folder named `ELPephants\reid_faces`. The metdatafile `class_mapping.txt` which contains each file to class id mapping is required to be present in the same folder<br>
